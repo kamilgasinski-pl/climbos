@@ -13,8 +13,9 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "../../supabaseclient";
 import { konwertujOcene, SKALA_KURTYKI, najtrudniejszaOcena } from "../../engine/gradeEngine";
+import { NAZWY_KOMPETENCJI, FILARY, NAZWY_FILAROW, Kompetencja, Filar } from "../../engine/climbingKnowledgeEngine";
 import Link from "next/link";
-import { Loader2, Pencil, X } from "lucide-react";
+import { Loader2, Pencil, X, Check } from "lucide-react";
 
 type Sesja = {
   id: number;
@@ -37,6 +38,13 @@ type WierszDrogi = {
   nazwaDrogi: string;
   trudnosc: string;
   styl: string;
+};
+
+type CelSesji = {
+  id: number;
+  tytul: string;
+  kompetencje: Kompetencja[];
+  wykonano: boolean;
 };
 
 function nowyWiersz(): WierszDrogi {
@@ -64,9 +72,16 @@ export default function SzczegolySesji() {
   const [notatkaTekst, setNotatkaTekst] = useState("");
   const [zapisywanieNotatki, setZapisywanieNotatki] = useState(false);
 
+  const [celeSesji, setCeleSesji] = useState<CelSesji[]>([]);
+  const [nowyCelTytul, setNowyCelTytul] = useState("");
+  const [nowyCelKompetencje, setNowyCelKompetencje] = useState<Kompetencja[]>([]);
+  const [pokazKompetencjeCelu, setPokazKompetencjeCelu] = useState(false);
+  const [bladCelu, setBladCelu] = useState("");
+  const [zapisywanieCelu, setZapisywanieCelu] = useState(false);
+
   useEffect(() => {
     async function pobierzWszystko() {
-      await Promise.all([pobierzSesje(), pobierzPrzejscia()]);
+      await Promise.all([pobierzSesje(), pobierzPrzejscia(), pobierzCeleSesji()]);
       setLadowanie(false);
     }
     pobierzWszystko();
@@ -101,6 +116,21 @@ export default function SzczegolySesji() {
       return;
     }
     setPrzejscia(data as Przejscie[]);
+  }
+
+  async function pobierzCeleSesji() {
+    const { data, error } = await supabase
+      .from("cele_sesji")
+      .select("*")
+      .eq("sesja_id", sesjaId)
+      .order("id", { ascending: true });
+
+    if (error) {
+      console.error("Błąd pobierania celów sesji:", error);
+      setBladPobierania("Nie udało się pobrać celów sesji.");
+      return;
+    }
+    setCeleSesji(data as unknown as CelSesji[]);
   }
 
   async function zapiszNotatke() {
@@ -184,6 +214,69 @@ export default function SzczegolySesji() {
     pobierzPrzejscia();
   }
 
+  function przelaczKompetencjeCelu(klucz: Kompetencja) {
+    setNowyCelKompetencje((poprzednie) =>
+      poprzednie.includes(klucz)
+        ? poprzednie.filter((k) => k !== klucz)
+        : [...poprzednie, klucz]
+    );
+  }
+
+  async function dodajCelSesji() {
+    if (nowyCelTytul.trim() === "") {
+      setBladCelu("Podaj nazwę celu.");
+      return;
+    }
+    setBladCelu("");
+    setZapisywanieCelu(true);
+
+    const { error } = await supabase.from("cele_sesji").insert({
+      sesja_id: sesjaId,
+      tytul: nowyCelTytul,
+      kompetencje: nowyCelKompetencje,
+    });
+
+    setZapisywanieCelu(false);
+
+    if (error) {
+      console.error("Błąd dodawania celu sesji:", error);
+      setBladCelu("Nie udało się dodać celu. Spróbuj ponownie.");
+      return;
+    }
+
+    setNowyCelTytul("");
+    setNowyCelKompetencje([]);
+    setPokazKompetencjeCelu(false);
+    pobierzCeleSesji();
+  }
+
+  async function przelaczWykonanieCelu(cel: CelSesji) {
+    const { error } = await supabase
+      .from("cele_sesji")
+      .update({ wykonano: !cel.wykonano })
+      .eq("id", cel.id);
+
+    if (error) {
+      console.error("Błąd aktualizacji celu:", error);
+      setBladPobierania("Nie udało się zaktualizować celu. Spróbuj ponownie.");
+      return;
+    }
+
+    setCeleSesji((poprzednie) =>
+      poprzednie.map((c) => (c.id === cel.id ? { ...c, wykonano: !c.wykonano } : c))
+    );
+  }
+
+  async function usunCelSesji(id: number) {
+    const { error } = await supabase.from("cele_sesji").delete().eq("id", id);
+    if (error) {
+      console.error("Błąd usuwania celu:", error);
+      setBladPobierania("Nie udało się usunąć celu. Spróbuj ponownie.");
+      return;
+    }
+    setCeleSesji((poprzednie) => poprzednie.filter((c) => c.id !== id));
+  }
+
   const liczbaDrog = przejscia.length;
   const najtrudniejszaWSesji = najtrudniejszaOcena(przejscia.map((p) => p.trudnosc));
 
@@ -252,6 +345,121 @@ export default function SzczegolySesji() {
             </button>
           </div>
         )}
+      </Card>
+
+      <h2 className="text-xl font-bold mt-8">Cele sesji</h2>
+      <p className="text-gray-500 text-sm mt-1">
+        Np. "3x lot" żeby popracować nad kontrolą emocji. Odhaczony cel dolicza punkty do
+        profilu kompetencji na Home.
+      </p>
+
+      <Card className="p-4 mt-3">
+        {celeSesji.length === 0 ? (
+          <p className="text-gray-400 text-sm mb-3">Brak celów dla tej sesji.</p>
+        ) : (
+          <ul className="flex flex-col gap-2 mb-4">
+            {celeSesji.map((cel) => (
+              <li
+                key={cel.id}
+                className="flex items-center gap-3 rounded-md px-3 py-2 bg-gray-50"
+              >
+                <button
+                  onClick={() => przelaczWykonanieCelu(cel)}
+                  className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center transition-colors ${
+                    cel.wykonano
+                      ? "bg-green-600 border-green-600 text-white"
+                      : "border-gray-300 hover:border-gray-400"
+                  }`}
+                  aria-label={cel.wykonano ? "Oznacz jako niewykonany" : "Oznacz jako wykonany"}
+                >
+                  {cel.wykonano && <Check size={12} />}
+                </button>
+                <span
+                  className={`text-sm font-medium ${
+                    cel.wykonano ? "line-through text-gray-400" : ""
+                  }`}
+                >
+                  {cel.tytul}
+                </span>
+                {cel.kompetencje.length > 0 && (
+                  <div className="flex gap-1 flex-wrap ml-1">
+                    {cel.kompetencje.map((k) => (
+                      <span
+                        key={k}
+                        className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-600"
+                      >
+                        {NAZWY_KOMPETENCJI[k]}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <button
+                  onClick={() => usunCelSesji(cel.id)}
+                  className="text-gray-400 hover:text-red-600 ml-auto shrink-0"
+                >
+                  <X size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="flex gap-2 flex-wrap items-center">
+          <Input
+            value={nowyCelTytul}
+            onChange={(e) => setNowyCelTytul(e.target.value)}
+            placeholder="Nazwa celu (np. 3x lot)"
+            className="w-[220px]"
+          />
+          <Button onClick={dodajCelSesji} disabled={zapisywanieCelu}>
+            {zapisywanieCelu ? "Zapisywanie..." : "+ Dodaj cel"}
+          </Button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setPokazKompetencjeCelu(!pokazKompetencjeCelu)}
+          className="text-sm text-blue-600 hover:underline mt-3"
+        >
+          {pokazKompetencjeCelu
+            ? "− Ukryj kompetencje"
+            : nowyCelKompetencje.length > 0
+            ? `+ Kompetencje (${nowyCelKompetencje.length})`
+            : "+ Dodaj kompetencje (opcjonalnie)"}
+        </button>
+
+        {pokazKompetencjeCelu && (
+          <div className="mt-3">
+            <div className="text-gray-500 text-xs mb-2">
+              Które kompetencje rozwija ten cel? (opcjonalnie)
+            </div>
+            <div className="flex flex-col gap-2">
+              {(Object.keys(FILARY) as Filar[]).map((filar) => (
+                <div key={filar} className="flex items-center gap-2 flex-wrap">
+                  <span className="text-gray-400 text-xs w-[70px] shrink-0">
+                    {NAZWY_FILAROW[filar]}
+                  </span>
+                  {FILARY[filar].map((klucz) => (
+                    <button
+                      key={klucz}
+                      type="button"
+                      onClick={() => przelaczKompetencjeCelu(klucz)}
+                      className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
+                        nowyCelKompetencje.includes(klucz)
+                          ? "bg-gray-900 border-gray-900 text-white"
+                          : "border-gray-300 text-gray-600 hover:border-gray-400"
+                      }`}
+                    >
+                      {NAZWY_KOMPETENCJI[klucz]}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {bladCelu && <p className="text-red-600 text-sm mt-2">{bladCelu}</p>}
       </Card>
 
       <h2 className="text-xl font-bold mt-8">Dodaj drogi do tej sesji</h2>

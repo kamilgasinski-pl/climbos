@@ -13,12 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import KategorieManager, { Kategoria } from "./KategorieManager";
-import WyborGodziny from "./WyborGodziny";
 import { NAZWY_KOMPETENCJI, FILARY, NAZWY_FILAROW, Kompetencja, Filar } from "../engine/climbingKnowledgeEngine";
 import { X } from "lucide-react";
 
 const DNI_TYGODNIA = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"];
-const SKROTY_DNI = ["Pn", "Wt", "Śr", "Czw", "Pt", "Sob", "Nd"];
 const GODZINA_START_SIATKI = 5;
 const GODZINA_KONIEC_SIATKI = 23;
 
@@ -60,6 +58,7 @@ export default function HarmonogramTygodniowy() {
   const [tytul, setTytul] = useState("");
   const [kategoriaId, setKategoriaId] = useState("");
   const [wybraneKompetencje, setWybraneKompetencje] = useState<Kompetencja[]>([]);
+  const [pokazKompetencje, setPokazKompetencje] = useState(false);
   const [bladFormularza, setBladFormularza] = useState("");
   const [zapisywanie, setZapisywanie] = useState(false);
 
@@ -134,18 +133,25 @@ export default function HarmonogramTygodniowy() {
       setTytul("");
       setKategoriaId("");
       setWybraneKompetencje([]);
+      setPokazKompetencje(false);
       setBladFormularza("");
       setPokazFormularz(true);
 
       return aktualne;
     });
   }
-function przelaczKompetencje(klucz: Kompetencja) {
+
+  function przelaczKompetencje(klucz: Kompetencja) {
     setWybraneKompetencje((poprzednie) =>
       poprzednie.includes(klucz)
         ? poprzednie.filter((k) => k !== klucz)
         : [...poprzednie, klucz]
     );
+  }
+
+  function anulujFormularz() {
+    setPokazFormularz(false);
+    setZaznaczenie(null);
   }
 
   async function dodajBlok() {
@@ -179,6 +185,7 @@ function przelaczKompetencje(klucz: Kompetencja) {
 
     setTytul("");
     setWybraneKompetencje([]);
+    setPokazKompetencje(false);
     setPokazFormularz(false);
     setZaznaczenie(null);
     pobierzBloki();
@@ -204,60 +211,25 @@ function przelaczKompetencje(klucz: Kompetencja) {
       </Card>
 
       <p className="text-gray-500 text-sm mb-3">
-        Kliknij i przeciągnij po siatce, żeby zaznaczyć zakres godzin, albo dodaj blok ręcznie.
+        Kliknij i przeciągnij po siatce poniżej, żeby zaznaczyć dzień i zakres godzin nowego bloku.
       </p>
-
-      <div className="flex justify-end mb-3">
-        <Button
-          onClick={() => {
-            setTytul("");
-            setKategoriaId("");
-            setWybraneKompetencje([]);
-            setBladFormularza("");
-            setZaznaczenie(null);
-            setPokazFormularz(!pokazFormularz);
-          }}
-        >
-          {pokazFormularz ? "Anuluj" : "+ Dodaj blok"}
-        </Button>
-      </div>
 
       {pokazFormularz && (
         <Card className="p-4 mb-5" ref={formularzRef}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md text-sm font-medium text-blue-700">
+              {DNI_TYGODNIA[Number(dzien)]} · {godzinaStart}–{godzinaKoniec}
+            </div>
+            <Button variant="outline" size="sm" onClick={anulujFormularz}>
+              Anuluj
+            </Button>
+          </div>
+
+          <p className="text-gray-400 text-xs mb-3">
+            Żeby zmienić dzień lub godziny, po prostu przeciągnij ponownie po siatce.
+          </p>
+
           <div className="flex gap-2 flex-wrap items-center">
-            <Select
-              value={dzien}
-              onValueChange={(v) => {
-                setDzien(v ?? "0");
-                setZaznaczenie(null);
-              }}
-            >
-              <SelectTrigger className="w-[80px]">
-                <span>{SKROTY_DNI[Number(dzien)]}</span>
-              </SelectTrigger>
-              <SelectContent>
-                {DNI_TYGODNIA.map((d, i) => (
-                  <SelectItem key={i} value={String(i)}>
-                    {d}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <WyborGodziny
-              value={godzinaStart}
-              onChange={(v) => {
-                setGodzinaStart(v);
-                setZaznaczenie(null);
-              }}
-            />
-            <span className="text-gray-400">—</span>
-            <WyborGodziny
-              value={godzinaKoniec}
-              onChange={(v) => {
-                setGodzinaKoniec(v);
-                setZaznaczenie(null);
-              }}
-            />
             <Input
               value={tytul}
               onChange={(e) => setTytul(e.target.value)}
@@ -277,41 +249,57 @@ function przelaczKompetencje(klucz: Kompetencja) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex items-center justify-between mt-3">
+            <button
+              type="button"
+              onClick={() => setPokazKompetencje(!pokazKompetencje)}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              {pokazKompetencje
+                ? "− Ukryj kompetencje"
+                : wybraneKompetencje.length > 0
+                ? `+ Kompetencje (${wybraneKompetencje.length})`
+                : "+ Dodaj kompetencje (opcjonalnie)"}
+            </button>
             <Button onClick={dodajBlok} disabled={zapisywanie}>
               {zapisywanie ? "Zapisywanie..." : "Zapisz blok"}
             </Button>
           </div>
 
-          <div className="mt-3">
-            <div className="text-gray-500 text-xs mb-2">
-              Które kompetencje rozwija ten blok? (opcjonalnie)
+          {pokazKompetencje && (
+            <div className="mt-3">
+              <div className="text-gray-500 text-xs mb-2">
+                Które kompetencje rozwija ten blok? (opcjonalnie)
+              </div>
+              <div className="flex flex-col gap-2">
+                {(Object.keys(FILARY) as Filar[]).map((filar) => (
+                  <div key={filar} className="flex items-center gap-2 flex-wrap">
+                    <span className="text-gray-400 text-xs w-[70px] shrink-0">
+                      {NAZWY_FILAROW[filar]}
+                    </span>
+                    {FILARY[filar].map((klucz) => (
+                      <button
+                        key={klucz}
+                        type="button"
+                        onClick={() => przelaczKompetencje(klucz)}
+                        className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
+                          wybraneKompetencje.includes(klucz)
+                            ? "bg-gray-900 border-gray-900 text-white"
+                            : "border-gray-300 text-gray-600 hover:border-gray-400"
+                        }`}
+                      >
+                        {NAZWY_KOMPETENCJI[klucz]}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-col gap-2">
-              {(Object.keys(FILARY) as Filar[]).map((filar) => (
-                <div key={filar} className="flex items-center gap-2 flex-wrap">
-                  <span className="text-gray-400 text-xs w-[70px] shrink-0">
-                    {NAZWY_FILAROW[filar]}
-                  </span>
-                  {FILARY[filar].map((klucz) => (
-                    <button
-                      key={klucz}
-                      type="button"
-                      onClick={() => przelaczKompetencje(klucz)}
-                      className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
-                        wybraneKompetencje.includes(klucz)
-                          ? "bg-gray-900 border-gray-900 text-white"
-                          : "border-gray-300 text-gray-600 hover:border-gray-400"
-                      }`}
-                    >
-                      {NAZWY_KOMPETENCJI[klucz]}
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
 
-          {bladFormularza && <p className="text-red-600 text-sm mt-2">{bladFormularza}</p>}
+          {bladFormularza && <p className="text-red-600 text-sm mt-3">{bladFormularza}</p>}
         </Card>
       )}
 

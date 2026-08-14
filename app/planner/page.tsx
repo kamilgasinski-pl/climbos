@@ -8,8 +8,8 @@ import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import HarmonogramTygodniowy from "../components/HarmonogramTygodniowy";
 import SledzenieRealizacji from "../components/SledzenieRealizacji";
-import PriorytetyKompetencji from "../components/PriorytetyKompetencji";
 import PiramidaCelow from "../components/PiramidaCelow";
+import { useSearchParams } from "next/navigation";
 
 type Sesja = {
   id: number;
@@ -102,8 +102,18 @@ function pogrupujWgWidoku(sesje: Sesja[], widok: ZakresWidoku): Grupa[] {
   );
 }
 
+function poprawnaZakladka(wartosc: string | null): Zakladka {
+  if (wartosc === "harmonogram" || wartosc === "realizacja" || wartosc === "cele") {
+    return wartosc;
+  }
+  return "sesje";
+}
+
 export default function Planner() {
-  const [aktywnaZakladka, setAktywnaZakladka] = useState<Zakladka>("sesje");
+  const searchParams = useSearchParams();
+  const [aktywnaZakladka, setAktywnaZakladka] = useState<Zakladka>(
+    poprawnaZakladka(searchParams.get("tab"))
+  );
   const [widokZakres, setWidokZakres] = useState<ZakresWidoku>("tydzien");
   const [nadchodzace, setNadchodzace] = useState<Sesja[]>([]);
   const [ladowanie, setLadowanie] = useState(true);
@@ -206,9 +216,8 @@ export default function Planner() {
         <div className="mt-5">
           <SledzenieRealizacji />
         </div>
-      ) : aktywnaZakladka === "cele" ? (
-        <div className="mt-5 flex flex-col gap-5">
-          <PriorytetyKompetencji />
+       ) : aktywnaZakladka === "cele" ? (
+        <div className="mt-5">
           <PiramidaCelow />
         </div>
       ) : (

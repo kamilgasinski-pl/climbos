@@ -12,10 +12,10 @@ const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const linki = [
   { href: "/", label: "Home", ikona: Home },
+  { href: "/planner", label: "Planner", ikona: CalendarDays },
   { href: "/logbook", label: "Logbook", ikona: BookOpen },
   { href: "/sesje", label: "Sesje", ikona: Calendar },
   { href: "/dna", label: "DNA", ikona: Dna },
-  { href: "/planner", label: "Planner", ikona: CalendarDays },
   { href: "/profil", label: "Profil", ikona: User },
 ];
 

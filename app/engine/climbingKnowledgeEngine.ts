@@ -140,6 +140,39 @@ export function policzKompetencjeZTreningu(
  * Łączy dwa źródła kompetencji (np. z dróg i z treningu) w jeden profil,
  * sumując wartości i ograniczając każdą do maksymalnie 100.
  */
+type CelSesjiDoKompetencji = {
+  kompetencje: Kompetencja[];
+  wykonano: boolean;
+};
+
+/**
+ * Liczy punkty kompetencji z wykonanych celów sesji (np. "3x lot"
+ * otagowany kontrolaEmocji). Każdy wykonany cel dolicza
+ * PUNKTY_ZA_WYKONANIE do każdej oznaczonej kompetencji, analogicznie
+ * do policzKompetencjeZTreningu.
+ */
+export function policzKompetencjeZCelowSesji(
+  cele: CelSesjiDoKompetencji[]
+): Record<Kompetencja, number> {
+  const suma = pustyProfil();
+
+  for (const cel of cele) {
+    if (!cel.wykonano) continue;
+
+    for (const klucz of cel.kompetencje) {
+      if (klucz in suma) {
+        suma[klucz] += PUNKTY_ZA_WYKONANIE;
+      }
+    }
+  }
+
+  const wynik = {} as Record<Kompetencja, number>;
+  for (const klucz of Object.keys(suma) as Kompetencja[]) {
+    wynik[klucz] = Math.min(100, suma[klucz]);
+  }
+
+  return wynik;
+}
 export function polaczKompetencje(
   a: Record<Kompetencja, number>,
   b: Record<Kompetencja, number>

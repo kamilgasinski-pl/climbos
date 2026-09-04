@@ -13,6 +13,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "../../supabaseclient";
 import { konwertujOcene, SKALA_KURTYKI, najtrudniejszaOcena } from "../../engine/gradeEngine";
+import { minutyNaHHMM, hhmmNaMinuty } from "../../engine/czasEngine";
 import { NAZWY_KOMPETENCJI, FILARY, NAZWY_FILAROW, Kompetencja, Filar } from "../../engine/climbingKnowledgeEngine";
 import Link from "next/link";
 import { Loader2, Pencil, X, Check } from "lucide-react";
@@ -23,6 +24,8 @@ type Sesja = {
   miejsce: string;
   czas_trwania_min: number;
   notatka: string | null;
+  kalorie_spalone: number | null;
+  srednie_bpm: number | null;
 };
 
 type Przejscie = {
@@ -72,6 +75,15 @@ export default function SzczegolySesji() {
   const [notatkaTekst, setNotatkaTekst] = useState("");
   const [zapisywanieNotatki, setZapisywanieNotatki] = useState(false);
 
+  const [edycjaZegarka, setEdycjaZegarka] = useState(false);
+  const [kalorieTekst, setKalorieTekst] = useState("");
+  const [bpmTekst, setBpmTekst] = useState("");
+  const [zapisywanieZegarka, setZapisywanieZegarka] = useState(false);
+
+  const [edycjaCzasu, setEdycjaCzasu] = useState(false);
+  const [czasTekst, setCzasTekst] = useState("");
+  const [zapisywanieCzasu, setZapisywanieCzasu] = useState(false);
+
   const [celeSesji, setCeleSesji] = useState<CelSesji[]>([]);
   const [nowyCelTytul, setNowyCelTytul] = useState("");
   const [nowyCelKompetencje, setNowyCelKompetencje] = useState<Kompetencja[]>([]);
@@ -101,6 +113,9 @@ export default function SzczegolySesji() {
     }
     setSesja(data as Sesja);
     setNotatkaTekst((data as Sesja).notatka ?? "");
+    setKalorieTekst((data as Sesja).kalorie_spalone?.toString() ?? "");
+    setBpmTekst((data as Sesja).srednie_bpm?.toString() ?? "");
+    setCzasTekst(minutyNaHHMM((data as Sesja).czas_trwania_min));
   }
 
   async function pobierzPrzejscia() {
@@ -155,6 +170,57 @@ export default function SzczegolySesji() {
         : poprzednia
     );
     setEdycjaNotatki(false);
+  }
+
+  async function zapiszDaneZegarka() {
+    setZapisywanieZegarka(true);
+
+    const kalorie = kalorieTekst.trim() === "" ? null : Number(kalorieTekst);
+    const bpm = bpmTekst.trim() === "" ? null : Number(bpmTekst);
+
+    const { error } = await supabase
+      .from("sesje")
+      .update({ kalorie_spalone: kalorie, srednie_bpm: bpm })
+      .eq("id", sesjaId);
+
+    setZapisywanieZegarka(false);
+
+    if (error) {
+      console.error("Błąd zapisu danych z zegarka:", error);
+      setBladPobierania("Nie udało się zapisać danych z zegarka. Spróbuj ponownie.");
+      return;
+    }
+
+    setSesja((poprzednia) =>
+      poprzednia ? { ...poprzednia, kalorie_spalone: kalorie, srednie_bpm: bpm } : poprzednia
+    );
+    setEdycjaZegarka(false);
+  }
+
+  async function zapiszCzas() {
+    const nowyCzas = hhmmNaMinuty(czasTekst);
+    if (nowyCzas === null || nowyCzas <= 0) {
+      setBladPobierania("Podaj czas w formacie GG:MM, np. 01:24.");
+      return;
+    }
+    setBladPobierania("");
+    setZapisywanieCzasu(true);
+
+    const { error } = await supabase
+      .from("sesje")
+      .update({ czas_trwania_min: nowyCzas })
+      .eq("id", sesjaId);
+
+    setZapisywanieCzasu(false);
+
+    if (error) {
+      console.error("Błąd zapisu czasu trwania:", error);
+      setBladPobierania("Nie udało się zapisać czasu trwania. Spróbuj ponownie.");
+      return;
+    }
+
+    setSesja((poprzednia) => (poprzednia ? { ...poprzednia, czas_trwania_min: nowyCzas } : poprzednia));
+    setEdycjaCzasu(false);
   }
 
   function dodajWiersz() {
@@ -303,7 +369,41 @@ export default function SzczegolySesji() {
       <h1 className="text-3xl font-bold mt-4">
         {sesja.miejsce} — {sesja.data_treningu}
       </h1>
-      <p className="text-gray-500">Czas trwania: {sesja.czas_trwania_min} min</p>
+      {edycjaCzasu ? (
+        <div className="flex items-center gap-2 mt-1">
+          <Input
+            type="text"
+            value={czasTekst}
+            onChange={(e) => setCzasTekst(e.target.value)}
+            placeholder="GG:MM"
+            className="w-[100px]"
+            autoComplete="off"
+          />
+          <Button onClick={zapiszCzas} disabled={zapisywanieCzasu} size="sm">
+            {zapisywanieCzasu ? "Zapisywanie..." : "Zapisz"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setCzasTekst(minutyNaHHMM(sesja.czas_trwania_min));
+              setEdycjaCzasu(false);
+            }}
+          >
+            Anuluj
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <p className="text-gray-500">Czas trwania: {minutyNaHHMM(sesja.czas_trwania_min)}</p>
+          <button
+            onClick={() => setEdycjaCzasu(true)}
+            className="text-gray-400 hover:text-gray-700"
+          >
+            <Pencil size={14} />
+          </button>
+        </div>
+      )}
       {bladPobierania && <p className="text-red-600 mt-2">{bladPobierania}</p>}
 
       <Card className="p-4 mt-4">
@@ -339,6 +439,77 @@ export default function SzczegolySesji() {
             </p>
             <button
               onClick={() => setEdycjaNotatki(true)}
+              className="text-gray-400 hover:text-gray-700 shrink-0"
+            >
+              <Pencil size={16} />
+            </button>
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-4 mt-4">
+        {edycjaZegarka ? (
+          <div className="flex flex-col gap-2">
+            <div className="text-gray-500 text-sm mb-1">Dane z zegarka (opcjonalnie)</div>
+            <div className="flex gap-2 flex-wrap">
+              <Input
+                type="number"
+                value={kalorieTekst}
+                onChange={(e) => setKalorieTekst(e.target.value)}
+                placeholder="Spalone kalorie (kcal)"
+                className="w-[200px]"
+                autoComplete="off"
+              />
+              <Input
+                type="number"
+                value={bpmTekst}
+                onChange={(e) => setBpmTekst(e.target.value)}
+                placeholder="Średnie BPM"
+                className="w-[160px]"
+                autoComplete="off"
+              />
+            </div>
+            <div className="flex gap-2 mt-1">
+              <Button onClick={zapiszDaneZegarka} disabled={zapisywanieZegarka} size="sm">
+                {zapisywanieZegarka ? "Zapisywanie..." : "Zapisz dane"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setKalorieTekst(sesja.kalorie_spalone?.toString() ?? "");
+                  setBpmTekst(sesja.srednie_bpm?.toString() ?? "");
+                  setEdycjaZegarka(false);
+                }}
+              >
+                Anuluj
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start justify-between gap-3">
+            {sesja.kalorie_spalone != null || sesja.srednie_bpm != null ? (
+              <div className="flex gap-6 text-sm">
+                {sesja.kalorie_spalone != null && (
+                  <div>
+                    <span className="text-gray-500">🔥 Kalorie: </span>
+                    <span className="font-bold">{sesja.kalorie_spalone} kcal</span>
+                  </div>
+                )}
+                {sesja.srednie_bpm != null && (
+                  <div>
+                    <span className="text-gray-500">❤️ Średnie BPM: </span>
+                    <span className="font-bold">{sesja.srednie_bpm}</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-gray-400 italic text-sm">
+                Brak danych z zegarka — kliknij, aby dodać.
+              </p>
+            )}
+            <button
+              onClick={() => setEdycjaZegarka(true)}
               className="text-gray-400 hover:text-gray-700 shrink-0"
             >
               <Pencil size={16} />
@@ -411,9 +582,6 @@ export default function SzczegolySesji() {
             placeholder="Nazwa celu (np. 3x lot)"
             className="w-[220px]"
           />
-          <Button onClick={dodajCelSesji} disabled={zapisywanieCelu}>
-            {zapisywanieCelu ? "Zapisywanie..." : "+ Dodaj cel"}
-          </Button>
         </div>
 
         <button
@@ -460,6 +628,12 @@ export default function SzczegolySesji() {
         )}
 
         {bladCelu && <p className="text-red-600 text-sm mt-2">{bladCelu}</p>}
+
+        <div className="mt-3">
+          <Button onClick={dodajCelSesji} disabled={zapisywanieCelu}>
+            {zapisywanieCelu ? "Zapisywanie..." : "+ Dodaj cel"}
+          </Button>
+        </div>
       </Card>
 
       <h2 className="text-xl font-bold mt-8">Dodaj drogi do tej sesji</h2>

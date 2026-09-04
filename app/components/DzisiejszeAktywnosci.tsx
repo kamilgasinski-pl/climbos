@@ -134,7 +134,7 @@ export default function DzisiejszeAktywnosci({ onZmiana }: Props) {
       ) : bloki.length === 0 ? (
         <div className="text-gray-500 text-sm">
           Nic nie zaplanowano na dziś.{" "}
-          <Link href="/harmonogram" className="text-blue-600 hover:underline">
+          <Link href="/planner?tab=harmonogram" className="text-blue-600 hover:underline">
             Dodaj aktywność →
           </Link>
         </div>

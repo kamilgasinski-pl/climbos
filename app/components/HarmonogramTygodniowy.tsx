@@ -5,16 +5,9 @@ import { supabase } from "../supabaseclient";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import KategorieManager, { Kategoria } from "./KategorieManager";
 import { NAZWY_KOMPETENCJI, FILARY, NAZWY_FILAROW, Kompetencja, Filar } from "../engine/climbingKnowledgeEngine";
-import { X } from "lucide-react";
+import { X, Pencil, StickyNote } from "lucide-react";
 
 const DNI_TYGODNIA = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"];
 const GODZINA_START_SIATKI = 5;
@@ -27,10 +20,28 @@ type Blok = {
   godzina_koniec: string;
   tytul: string;
   kategoria_id: number | null;
+  kompetencje: Kompetencja[] | null;
+  notatka: string | null;
   kategorie_treningowe: { nazwa: string; kolor: string } | null;
 };
 
 type Zaznaczenie = {
+  dzien: number;
+  start: number;
+  koniec: number;
+};
+
+type TrybPrzeciagania = "przesun" | "rozciagnijGora" | "rozciagnijDol";
+
+type PrzeciaganieBloku = {
+  blokId: number;
+  tryb: TrybPrzeciagania;
+  dlugosc: number;
+  uchwytOffset: number;
+  kolor: string;
+};
+
+type PodgladBloku = {
   dzien: number;
   start: number;
   koniec: number;
@@ -59,11 +70,16 @@ export default function HarmonogramTygodniowy() {
   const [kategoriaId, setKategoriaId] = useState("");
   const [wybraneKompetencje, setWybraneKompetencje] = useState<Kompetencja[]>([]);
   const [pokazKompetencje, setPokazKompetencje] = useState(false);
+  const [notatkaTekst, setNotatkaTekst] = useState("");
+  const [edytowanyBlokId, setEdytowanyBlokId] = useState<number | null>(null);
   const [bladFormularza, setBladFormularza] = useState("");
   const [zapisywanie, setZapisywanie] = useState(false);
 
   const [zaznaczenie, setZaznaczenie] = useState<Zaznaczenie | null>(null);
   const [przeciaganie, setPrzeciaganie] = useState(false);
+
+  const [przeciaganieBloku, setPrzeciaganieBloku] = useState<PrzeciaganieBloku | null>(null);
+  const [podgladBloku, setPodgladBloku] = useState<PodgladBloku | null>(null);
 
   const formularzRef = useRef<HTMLDivElement>(null);
 
@@ -79,11 +95,14 @@ export default function HarmonogramTygodniowy() {
         }
         return false;
       });
+      if (przeciaganieBloku) {
+        zakonczPrzeciaganieBloku();
+      }
     }
     window.addEventListener("mouseup", zakoncz);
     return () => window.removeEventListener("mouseup", zakoncz);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zaznaczenie]);
+  }, [zaznaczenie, przeciaganieBloku, podgladBloku]);
 
   useEffect(() => {
     if (pokazFormularz && formularzRef.current) {
@@ -108,6 +127,7 @@ export default function HarmonogramTygodniowy() {
   }
 
   function rozpocznijZaznaczanie(dzienIndex: number, godzinaIndex: number) {
+    if (przeciaganieBloku) return;
     setZaznaczenie({ dzien: dzienIndex, start: godzinaIndex, koniec: godzinaIndex });
     setPrzeciaganie(true);
     setPokazFormularz(false);
@@ -130,15 +150,122 @@ export default function HarmonogramTygodniowy() {
       setDzien(String(aktualne.dzien));
       setGodzinaStart(indeksNaGodzine(start));
       setGodzinaKoniec(indeksNaGodzine(koniec + 1));
-      setTytul("");
-      setKategoriaId("");
-      setWybraneKompetencje([]);
+
+      // Jeśli NIE edytujemy istniejącego bloku, to jest nowy blok -
+      // czyścimy resztę formularza. Jeśli edytujemy, zachowujemy
+      // tytuł/kategorię/kompetencje/notatkę - przeciągnięcie zmienia
+      // tylko dzień/godziny tego bloku.
+      setEdytowanyBlokId((biezacyEdytowanyId) => {
+        if (biezacyEdytowanyId === null) {
+          setTytul("");
+          setKategoriaId("");
+          setWybraneKompetencje([]);
+          setNotatkaTekst("");
+        }
+        return biezacyEdytowanyId;
+      });
+
       setPokazKompetencje(false);
       setBladFormularza("");
       setPokazFormularz(true);
 
       return aktualne;
     });
+  }
+
+  function rozpocznijPrzeciaganieBloku(
+    e: React.MouseEvent<HTMLDivElement>,
+    blok: Blok,
+    tryb: TrybPrzeciagania
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startIdx = Math.round(godzinaNaLiczbe(blok.godzina_start) - GODZINA_START_SIATKI);
+    const koniecIdx = Math.round(godzinaNaLiczbe(blok.godzina_koniec) - GODZINA_START_SIATKI) - 1;
+
+    let uchwytOffset = 0;
+    if (tryb === "przesun") {
+      const prostokat = e.currentTarget.getBoundingClientRect();
+      const liczbaRzedow = koniecIdx - startIdx + 1;
+      const wysokoscRzedu = prostokat.height / liczbaRzedow;
+      uchwytOffset = Math.min(
+        liczbaRzedow - 1,
+        Math.max(0, Math.floor((e.clientY - prostokat.top) / wysokoscRzedu))
+      );
+    }
+
+    setPrzeciaganieBloku({
+      blokId: blok.id,
+      tryb,
+      dlugosc: koniecIdx - startIdx,
+      uchwytOffset,
+      kolor: blok.kategorie_treningowe?.kolor ?? "#9ca3af",
+    });
+    setPodgladBloku({ dzien: blok.dzien_tygodnia, start: startIdx, koniec: koniecIdx });
+    setPokazFormularz(false);
+  }
+
+  function aktualizujPodgladPrzeciagania(dzienIndex: number, godzinaIndex: number) {
+    setPrzeciaganieBloku((aktualne) => {
+      if (!aktualne) return aktualne;
+
+      setPodgladBloku((poprzedni) => {
+        if (!poprzedni) return poprzedni;
+        const maks = GODZINA_KONIEC_SIATKI - GODZINA_START_SIATKI;
+
+        if (aktualne.tryb === "przesun") {
+          let nowyStart = godzinaIndex - aktualne.uchwytOffset;
+          let nowyKoniec = nowyStart + aktualne.dlugosc;
+          if (nowyStart < 0) {
+            nowyKoniec -= nowyStart;
+            nowyStart = 0;
+          }
+          if (nowyKoniec > maks) {
+            nowyStart -= nowyKoniec - maks;
+            nowyKoniec = maks;
+          }
+          return { dzien: dzienIndex, start: nowyStart, koniec: nowyKoniec };
+        }
+
+        if (aktualne.tryb === "rozciagnijGora") {
+          const nowyStart = Math.max(0, Math.min(godzinaIndex, poprzedni.koniec));
+          return { ...poprzedni, start: nowyStart };
+        }
+
+        const nowyKoniec = Math.min(maks, Math.max(godzinaIndex, poprzedni.start));
+        return { ...poprzedni, koniec: nowyKoniec };
+      });
+
+      return aktualne;
+    });
+  }
+
+  async function zakonczPrzeciaganieBloku() {
+    const blokId = przeciaganieBloku?.blokId;
+    const zakres = podgladBloku;
+
+    setPrzeciaganieBloku(null);
+    setPodgladBloku(null);
+
+    if (!blokId || !zakres) return;
+
+    const { error } = await supabase
+      .from("bloki_tygodniowe")
+      .update({
+        dzien_tygodnia: zakres.dzien,
+        godzina_start: indeksNaGodzine(zakres.start),
+        godzina_koniec: indeksNaGodzine(zakres.koniec + 1),
+      })
+      .eq("id", blokId);
+
+    if (error) {
+      console.error("Błąd przesuwania/rozciągania bloku:", error);
+      setBladPobierania("Nie udało się zaktualizować bloku. Spróbuj ponownie.");
+      return;
+    }
+
+    pobierzBloki();
   }
 
   function przelaczKompetencje(klucz: Kompetencja) {
@@ -152,9 +279,25 @@ export default function HarmonogramTygodniowy() {
   function anulujFormularz() {
     setPokazFormularz(false);
     setZaznaczenie(null);
+    setEdytowanyBlokId(null);
   }
 
-  async function dodajBlok() {
+  function edytujBlok(blok: Blok) {
+    setEdytowanyBlokId(blok.id);
+    setDzien(String(blok.dzien_tygodnia));
+    setGodzinaStart(blok.godzina_start.slice(0, 5));
+    setGodzinaKoniec(blok.godzina_koniec.slice(0, 5));
+    setTytul(blok.tytul);
+    setKategoriaId(blok.kategoria_id ? String(blok.kategoria_id) : "");
+    setWybraneKompetencje(blok.kompetencje ?? []);
+    setNotatkaTekst(blok.notatka ?? "");
+    setPokazKompetencje(false);
+    setBladFormularza("");
+    setZaznaczenie(null);
+    setPokazFormularz(true);
+  }
+
+  async function zapiszBlok() {
     if (tytul.trim() === "") {
       setBladFormularza("Podaj tytuł aktywności.");
       return;
@@ -166,28 +309,35 @@ export default function HarmonogramTygodniowy() {
     setBladFormularza("");
     setZapisywanie(true);
 
-    const { error } = await supabase.from("bloki_tygodniowe").insert({
+    const rekord = {
       dzien_tygodnia: Number(dzien),
       godzina_start: godzinaStart,
       godzina_koniec: godzinaKoniec,
       tytul,
       kategoria_id: kategoriaId ? Number(kategoriaId) : null,
       kompetencje: wybraneKompetencje,
-    });
+      notatka: notatkaTekst.trim() === "" ? null : notatkaTekst,
+    };
+
+    const { error } = edytowanyBlokId
+      ? await supabase.from("bloki_tygodniowe").update(rekord).eq("id", edytowanyBlokId)
+      : await supabase.from("bloki_tygodniowe").insert(rekord);
 
     setZapisywanie(false);
 
     if (error) {
-      console.error("Błąd dodawania bloku:", error);
-      setBladFormularza("Nie udało się dodać bloku. Spróbuj ponownie.");
+      console.error("Błąd zapisu bloku:", error);
+      setBladFormularza("Nie udało się zapisać bloku. Spróbuj ponownie.");
       return;
     }
 
     setTytul("");
     setWybraneKompetencje([]);
+    setNotatkaTekst("");
     setPokazKompetencje(false);
     setPokazFormularz(false);
     setZaznaczenie(null);
+    setEdytowanyBlokId(null);
     pobierzBloki();
   }
 
@@ -212,13 +362,21 @@ export default function HarmonogramTygodniowy() {
 
       <p className="text-gray-500 text-sm mb-3">
         Kliknij i przeciągnij po siatce poniżej, żeby zaznaczyć dzień i zakres godzin nowego bloku.
+        Istniejący blok możesz przenieść (chwyć środek) albo rozciągnąć (chwyć górną/dolną krawędź).
       </p>
 
       {pokazFormularz && (
         <Card className="p-4 mb-5" ref={formularzRef}>
           <div className="flex items-center justify-between mb-3">
-            <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md text-sm font-medium text-blue-700">
-              {DNI_TYGODNIA[Number(dzien)]} · {godzinaStart}–{godzinaKoniec}
+            <div className="flex items-center gap-2">
+              {edytowanyBlokId && (
+                <span className="text-xs font-bold uppercase tracking-wide text-gray-400">
+                  Edycja
+                </span>
+              )}
+              <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md text-sm font-medium text-blue-700">
+                {DNI_TYGODNIA[Number(dzien)]} · {godzinaStart}–{godzinaKoniec}
+              </div>
             </div>
             <Button variant="outline" size="sm" onClick={anulujFormularz}>
               Anuluj
@@ -237,18 +395,45 @@ export default function HarmonogramTygodniowy() {
               className="w-[200px]"
               autoFocus
             />
-            <Select value={kategoriaId} onValueChange={(v) => setKategoriaId(v ?? "")}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Kategoria" />
-              </SelectTrigger>
-              <SelectContent>
-                {kategorie.map((k) => (
-                  <SelectItem key={k.id} value={String(k.id)}>
+          </div>
+
+          <div className="mt-3">
+            <div className="text-gray-500 text-xs mb-2">Kategoria</div>
+            <div className="flex flex-wrap gap-2">
+              {kategorie.map((k) => {
+                const wybrana = kategoriaId === String(k.id);
+                return (
+                  <button
+                    key={k.id}
+                    type="button"
+                    onClick={() => setKategoriaId(wybrana ? "" : String(k.id))}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border transition-colors"
+                    style={
+                      wybrana
+                        ? { backgroundColor: k.kolor, borderColor: k.kolor, color: "#fff" }
+                        : { borderColor: k.kolor + "80", color: k.kolor, backgroundColor: k.kolor + "0d" }
+                    }
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: wybrana ? "#fff" : k.kolor }}
+                    />
                     {k.nazwa}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-3">
+            <div className="text-gray-500 text-xs mb-2">Notatka (opcjonalnie)</div>
+            <textarea
+              value={notatkaTekst}
+              onChange={(e) => setNotatkaTekst(e.target.value)}
+              placeholder="Np. link do sekwencji treningowej, dodatkowe informacje..."
+              rows={2}
+              className="w-full p-2 border border-gray-300 rounded-md resize-none text-sm"
+            />
           </div>
 
           <div className="flex items-center justify-between mt-3">
@@ -263,8 +448,8 @@ export default function HarmonogramTygodniowy() {
                 ? `+ Kompetencje (${wybraneKompetencje.length})`
                 : "+ Dodaj kompetencje (opcjonalnie)"}
             </button>
-            <Button onClick={dodajBlok} disabled={zapisywanie}>
-              {zapisywanie ? "Zapisywanie..." : "Zapisz blok"}
+            <Button onClick={zapiszBlok} disabled={zapisywanie}>
+              {zapisywanie ? "Zapisywanie..." : edytowanyBlokId ? "Zapisz zmiany" : "Zapisz blok"}
             </Button>
           </div>
 
@@ -348,7 +533,13 @@ export default function HarmonogramTygodniowy() {
                   <div
                     key={`${dzienIndex}-${i}`}
                     onMouseDown={() => rozpocznijZaznaczanie(dzienIndex, i)}
-                    onMouseEnter={() => kontynuujZaznaczanie(dzienIndex, i)}
+                    onMouseEnter={() => {
+                      if (przeciaganieBloku) {
+                        aktualizujPodgladPrzeciagania(dzienIndex, i);
+                      } else {
+                        kontynuujZaznaczanie(dzienIndex, i);
+                      }
+                    }}
                     className={`border-t border-l border-gray-100 cursor-pointer transition-colors ${
                       zaznaczone ? "bg-blue-100" : "hover:bg-gray-50"
                     }`}
@@ -358,36 +549,81 @@ export default function HarmonogramTygodniowy() {
               })
             )}
 
-            {bloki.map((blok) => {
-              const start = godzinaNaLiczbe(blok.godzina_start);
-              const koniec = godzinaNaLiczbe(blok.godzina_koniec);
-              const rowStart = Math.floor(start - GODZINA_START_SIATKI) + 2;
-              const rowEnd = Math.ceil(koniec - GODZINA_START_SIATKI) + 2;
-              const kolor = blok.kategorie_treningowe?.kolor ?? "#9ca3af";
+            {bloki
+              .filter((blok) => blok.id !== przeciaganieBloku?.blokId)
+              .map((blok) => {
+                const start = godzinaNaLiczbe(blok.godzina_start);
+                const koniec = godzinaNaLiczbe(blok.godzina_koniec);
+                const rowStart = Math.floor(start - GODZINA_START_SIATKI) + 2;
+                const rowEnd = Math.ceil(koniec - GODZINA_START_SIATKI) + 2;
+                const kolor = blok.kategorie_treningowe?.kolor ?? "#9ca3af";
 
-              return (
-                <div
-                  key={blok.id}
-                  className="group relative m-0.5 rounded-md px-2 py-1 overflow-hidden cursor-default"
-                  style={{
-                    gridColumn: blok.dzien_tygodnia + 2,
-                    gridRow: `${rowStart} / ${rowEnd}`,
-                    backgroundColor: kolor + "33",
-                    borderLeft: `3px solid ${kolor}`,
-                  }}
-                >
-                  <div className="text-xs font-medium truncate" style={{ color: kolor }}>
-                    {blok.tytul}
-                  </div>
-                  <button
-                    onClick={() => usunBlok(blok.id)}
-                    className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-red-600"
+                return (
+                  <div
+                    key={blok.id}
+                    className="group relative m-0.5 rounded-md px-2 py-1 overflow-hidden cursor-move"
+                    style={{
+                      gridColumn: blok.dzien_tygodnia + 2,
+                      gridRow: `${rowStart} / ${rowEnd}`,
+                      backgroundColor: kolor + "33",
+                      borderLeft: `3px solid ${kolor}`,
+                      pointerEvents: przeciaganieBloku ? "none" : undefined,
+                    }}
+                    onMouseDown={(e) => rozpocznijPrzeciaganieBloku(e, blok, "przesun")}
                   >
-                    <X size={12} />
-                  </button>
-                </div>
-              );
-            })}
+                    <div
+                      className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize"
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        rozpocznijPrzeciaganieBloku(e, blok, "rozciagnijGora");
+                      }}
+                    />
+                    <div
+                      className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize"
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        rozpocznijPrzeciaganieBloku(e, blok, "rozciagnijDol");
+                      }}
+                    />
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-medium truncate" style={{ color: kolor }}>
+                        {blok.tytul}
+                      </span>
+                      {blok.notatka && (
+                        <StickyNote size={10} className="shrink-0 opacity-60" style={{ color: kolor }} />
+                      )}
+                    </div>
+                    <div className="absolute top-0.5 right-0.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={() => edytujBlok(blok)}
+                        className="text-gray-500 hover:text-blue-600"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={() => usunBlok(blok.id)}
+                        className="text-gray-500 hover:text-red-600"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+            {podgladBloku && przeciaganieBloku && (
+              <div
+                className="relative m-0.5 rounded-md px-2 py-1 overflow-hidden pointer-events-none border-2 border-dashed"
+                style={{
+                  gridColumn: podgladBloku.dzien + 2,
+                  gridRow: `${podgladBloku.start + 2} / ${podgladBloku.koniec + 3}`,
+                  backgroundColor: przeciaganieBloku.kolor + "55",
+                  borderColor: przeciaganieBloku.kolor,
+                }}
+              />
+            )}
           </div>
         </Card>
       )}

@@ -44,16 +44,23 @@ type CelSesjiKompetencje = {
   wykonano: boolean;
 };
 
+type WynikTestu = {
+  ocena_koncowa: string;
+  data_testu: string;
+};
+
 export default function Home() {
   const [sesje, setSesje] = useState<Sesja[]>([]);
   const [blokiTreningowe, setBlokiTreningowe] = useState<BlokKompetencje[]>([]);
   const [wykonaniaBlokow, setWykonaniaBlokow] = useState<WykonanieBloku[]>([]);
   const [celeSesji, setCeleSesji] = useState<CelSesjiKompetencje[]>([]);
+  const [najnowszyTest, setNajnowszyTest] = useState<WynikTestu | null>(null);
 
   useEffect(() => {
     pobierzDane();
     pobierzKompetencjeTreningowe();
     pobierzKompetencjeZCelowSesji();
+    pobierzNajnowszyTest();
   }, []);
 
   async function pobierzDane() {
@@ -91,6 +98,21 @@ export default function Home() {
       return;
     }
     setCeleSesji(data as unknown as CelSesjiKompetencje[]);
+  }
+
+  async function pobierzNajnowszyTest() {
+    const { data, error } = await supabase
+      .from("testy_poziomu")
+      .select("ocena_koncowa, data_testu")
+      .order("data_testu", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Błąd pobierania testu poziomu:", error);
+      return;
+    }
+    setNajnowszyTest(data as WynikTestu | null);
   }
 
   const wszystkiePrzejscia = sesje.flatMap((s) => s.przejscia);
@@ -135,6 +157,31 @@ export default function Home() {
             <div className="text-xl font-bold">{wszystkiePrzejscia.length}</div>
           </div>
         </CardContent>
+      </Card>
+
+      <Card className="mt-6 p-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <div className="text-gray-500 text-sm">Szacowany poziom (test)</div>
+            {najnowszyTest ? (
+              <>
+                <div className="text-xl font-bold">{najnowszyTest.ocena_koncowa}</div>
+                <div className="text-gray-400 text-xs mt-0.5">
+                  {new Date(najnowszyTest.data_testu).toLocaleDateString("pl-PL", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </div>
+              </>
+            ) : (
+              <div className="text-gray-400 text-sm mt-1">Jeszcze nie wykonano testu</div>
+            )}
+          </div>
+          <Link href="/dna" className="text-blue-600 hover:underline text-sm">
+            {najnowszyTest ? "Zrób test ponownie →" : "Zrób test poziomu →"}
+          </Link>
+        </div>
       </Card>
 
       {/* Co dziś do zrobienia */}

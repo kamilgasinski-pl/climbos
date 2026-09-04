@@ -18,6 +18,7 @@ import {
 import PasekTrudnosci from "../components/PasekTrudnosci";
 import WykresProgresji from "../components/WykresProgresji";
 import WykresKompetencji from "../components/Wykreskompetencji";
+import TestPoziomu from "../components/TestPoziomu";
 import { Loader2 } from "lucide-react";
 
 type Przejscie = {
@@ -41,7 +42,7 @@ type Wykonanie = {
   blok_id: number;
 };
 
-type Zakladka = "trendy" | "luki" | "historia";
+type Zakladka = "trendy" | "luki" | "historia" | "test";
 type WidokKompetencji = "ogolny" | "szczegolowy";
 
 export default function DNA() {
@@ -102,7 +103,7 @@ export default function DNA() {
       <h1 className="text-3xl font-bold">DNA (Kompetencje)</h1>
       <p className="text-gray-500">Twój profil wspinaczkowy, oparty na realnych przejściach</p>
 
-      <div className="flex gap-2 mt-5">
+      <div className="flex gap-2 mt-5 flex-wrap">
         <Button
           variant={aktywnaZakladka === "trendy" ? "default" : "outline"}
           onClick={() => setAktywnaZakladka("trendy")}
@@ -120,6 +121,12 @@ export default function DNA() {
           onClick={() => setAktywnaZakladka("historia")}
         >
           Historia
+        </Button>
+        <Button
+          variant={aktywnaZakladka === "test" ? "default" : "outline"}
+          onClick={() => setAktywnaZakladka("test")}
+        >
+          Test poziomu
         </Button>
       </div>
 
@@ -178,7 +185,7 @@ export default function DNA() {
             )}
           </div>
         </>
-      ) : (
+      ) : aktywnaZakladka === "historia" ? (
         <>
           <h2 className="text-xl font-bold mt-8">Historia progresji</h2>
           <Card className="px-4 py-2">
@@ -191,6 +198,8 @@ export default function DNA() {
             )}
           </Card>
         </>
+      ) : (
+        <TestPoziomu przejscia={wszystkiePrzejscia} />
       )}
     </main>
   );

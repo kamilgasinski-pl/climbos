@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../supabaseclient";
 import Link from "next/link";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import WyborTypuSesji, { TypSesji } from "../components/WyborTypuSesji";
 
 type Przejscie = {
   id: number;
@@ -20,6 +21,10 @@ type Sesja = {
   miejsce: string;
   czas_trwania_min: number;
   notatka: string | null;
+  kalorie_spalone: number | null;
+  srednie_bpm: number | null;
+  rpe: number | null;
+  typ_sesji: TypSesji | null;
   przejscia: Przejscie[];
 };
 
@@ -156,7 +161,23 @@ export default function Sesje() {
                 <Card className="p-3">
                   <div className="flex flex-row items-center justify-between">
                     <div>
-                      <strong>{s.data_treningu}</strong> — {s.miejsce} ({s.czas_trwania_min} min)
+                      <strong>{s.data_treningu}</strong> — {s.miejsce}{" "}
+                      {s.typ_sesji === "bouldering" && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 align-middle">
+                          Bouldering
+                        </span>
+                      )}
+                      {s.typ_sesji !== "bouldering" && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 align-middle">
+                          Wspinaczka
+                        </span>
+                      )}{" "}
+                       <span className="text-gray-500">
+                        ({s.czas_trwania_min} min
+                        {s.kalorie_spalone != null && ` · 🔥 ${s.kalorie_spalone} kcal`}
+                        {s.srednie_bpm != null && ` · ❤️ ${s.srednie_bpm} bpm`}
+                        {s.rpe != null && ` · ⚡ RPE ${s.rpe}`})
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <button

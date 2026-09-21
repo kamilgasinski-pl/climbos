@@ -19,10 +19,14 @@ import {
 } from "@/components/ui/select";
 import { Pencil } from "lucide-react";
 
+type TypCelu = "poziom" | "tekstowy";
+
 type Cel = {
   id: number;
-  trudnosc_docelowa: string;
-  styl_docelowy: string;
+  typ: TypCelu;
+  trudnosc_docelowa: string | null;
+  styl_docelowy: string | null;
+  opis_tekstowy: string | null;
 };
 
 type Przejscie = {
@@ -46,8 +50,10 @@ export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, sesje }: P
   const [ladowanie, setLadowanie] = useState(true);
   const [edycja, setEdycja] = useState(false);
 
+  const [typCelu, setTypCelu] = useState<TypCelu>("poziom");
   const [trudnoscDocelowa, setTrudnoscDocelowa] = useState("");
   const [stylDocelowy, setStylDocelowy] = useState("RP");
+  const [opisTekstowy, setOpisTekstowy] = useState("");
   const [zapisywanie, setZapisywanie] = useState(false);
   const [blad, setBlad] = useState("");
 
@@ -65,9 +71,12 @@ export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, sesje }: P
     }
 
     if (data) {
-      setCel(data as Cel);
-      setTrudnoscDocelowa(data.trudnosc_docelowa);
-      setStylDocelowy(data.styl_docelowy);
+      const c = data as Cel;
+      setCel(c);
+      setTypCelu(c.typ ?? "poziom");
+      setTrudnoscDocelowa(c.trudnosc_docelowa ?? "");
+      setStylDocelowy(c.styl_docelowy ?? "RP");
+      setOpisTekstowy(c.opis_tekstowy ?? "");
     } else {
       setEdycja(true);
     }
@@ -75,8 +84,12 @@ export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, sesje }: P
   }
 
   async function zapiszCel() {
-    if (trudnoscDocelowa === "") {
+    if (typCelu === "poziom" && trudnoscDocelowa === "") {
       setBlad("Wybierz trudność docelową.");
+      return;
+    }
+    if (typCelu === "tekstowy" && opisTekstowy.trim() === "") {
+      setBlad("Opisz swój cel.");
       return;
     }
     setBlad("");
@@ -87,8 +100,10 @@ export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, sesje }: P
       .upsert(
         {
           id: cel?.id,
-          trudnosc_docelowa: trudnoscDocelowa,
-          styl_docelowy: stylDocelowy,
+          typ: typCelu,
+          trudnosc_docelowa: typCelu === "poziom" ? trudnoscDocelowa : null,
+          styl_docelowy: typCelu === "poziom" ? stylDocelowy : null,
+          opis_tekstowy: typCelu === "tekstowy" ? opisTekstowy : null,
         },
         { onConflict: "id" }
       )
@@ -113,28 +128,59 @@ export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, sesje }: P
     return (
       <Card className="p-5 mt-8">
         <div className="font-bold mb-3">Ustaw swój Mega Cel</div>
-        <div className="flex gap-2 flex-wrap items-center">
-          <Select value={stylDocelowy} onValueChange={(v) => setStylDocelowy(v ?? "RP")}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="RP">RP (redpoint)</SelectItem>
-              <SelectItem value="OS">OS (on-sight)</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={trudnoscDocelowa} onValueChange={(v) => setTrudnoscDocelowa(v ?? "")}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Trudność docelowa" />
-            </SelectTrigger>
-            <SelectContent>
-              {SKALA_KURTYKI.map((o) => (
-                <SelectItem key={o} value={o}>
-                  {o}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+
+        <div className="flex gap-2 mb-3">
+          <Button
+            size="sm"
+            variant={typCelu === "poziom" ? "default" : "outline"}
+            onClick={() => setTypCelu("poziom")}
+          >
+            Poziom wspinaczkowy
+          </Button>
+          <Button
+            size="sm"
+            variant={typCelu === "tekstowy" ? "default" : "outline"}
+            onClick={() => setTypCelu("tekstowy")}
+          >
+            Cel opisowy
+          </Button>
+        </div>
+
+        {typCelu === "poziom" ? (
+          <div className="flex gap-2 flex-wrap items-center">
+            <Select value={stylDocelowy} onValueChange={(v) => setStylDocelowy(v ?? "RP")}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="RP">RP (redpoint)</SelectItem>
+                <SelectItem value="OS">OS (on-sight)</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={trudnoscDocelowa} onValueChange={(v) => setTrudnoscDocelowa(v ?? "")}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Trudność docelowa" />
+              </SelectTrigger>
+              <SelectContent>
+                {SKALA_KURTYKI.map((o) => (
+                  <SelectItem key={o} value={o}>
+                    {o}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <textarea
+            value={opisTekstowy}
+            onChange={(e) => setOpisTekstowy(e.target.value)}
+            placeholder='Np. "Przejść drogę Hokej w Tatrach na własnej asekuracji"'
+            rows={2}
+            className="w-full p-2 border border-gray-300 rounded-md resize-none text-sm"
+          />
+        )}
+
+        <div className="flex gap-2 mt-3">
           <Button onClick={zapiszCel} disabled={zapisywanie}>
             {zapisywanie ? "Zapisywanie..." : "Zapisz cel"}
           </Button>
@@ -151,13 +197,27 @@ export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, sesje }: P
 
   if (!cel) return null;
 
-    const wszystkieTrudnosci = sesje.flatMap((s) => s.przejscia.map((p) => p.trudnosc));
+  if (cel.typ === "tekstowy") {
+    return (
+      <Card className="p-5 mt-8">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-gray-500 text-sm">Mega Cel</div>
+          <button onClick={() => setEdycja(true)} className="text-gray-400 hover:text-gray-700">
+            <Pencil size={16} />
+          </button>
+        </div>
+        <div className="text-xl font-bold">{cel.opis_tekstowy}</div>
+      </Card>
+    );
+  }
+
+  const wszystkieTrudnosci = sesje.flatMap((s) => s.przejscia.map((p) => p.trudnosc));
   const trudnoscObecna = najtrudniejszaOcena(wszystkieTrudnosci);
   const trudnoscStartowa = znajdzTrudnoscStartowa(sesje);
   const liczbaPrzejsc = zliczPrzejsciaWStylu(sesje);
   const postep = policzPostepDoCelu(
     trudnoscObecna,
-    cel.trudnosc_docelowa,
+    cel.trudnosc_docelowa!,
     trudnoscStartowa,
     liczbaPrzejsc
   );

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../supabaseclient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check } from "lucide-react";
+import { Check, X } from "lucide-react";
 
 const DNI_TYGODNIA = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"];
 const KROK_HISTORII = 4;
@@ -52,6 +52,15 @@ function formatujZakresTygodnia(poniedzialek: Date): string {
 function blokIstnialWTygodniu(blok: Blok, tydzienStart: Date): boolean {
   const tydzienUtworzenia = poniedzialekTygodnia(new Date(blok.created_at));
   return tydzienUtworzenia.getTime() <= tydzienStart.getTime();
+}
+function terminUplynal(blok: Blok, tydzienStart: Date): boolean {
+  const dataZaplanowana = new Date(tydzienStart);
+  dataZaplanowana.setDate(dataZaplanowana.getDate() + blok.dzien_tygodnia);
+
+  const terminOstateczny = new Date(dataZaplanowana);
+  terminOstateczny.setDate(terminOstateczny.getDate() + 7);
+
+  return new Date() > terminOstateczny;
 }
 
 /**
@@ -216,12 +225,14 @@ export default function SledzenieRealizacji() {
                   />
                   {blok.tytul}
                 </td>
-                {tygodnie.map((t) => {
+                                {tygodnie.map((t) => {
                   const tydzienStart = toISODate(t);
                   const istnial = blokIstnialWTygodniu(blok, t);
                   const wykonano = wykonania.some(
                     (w) => w.blok_id === blok.id && w.tydzien_start === tydzienStart
                   );
+                  const przegapiony = istnial && !wykonano && terminUplynal(blok, t);
+
                   return (
                     <td
                       key={tydzienStart}
@@ -230,13 +241,16 @@ export default function SledzenieRealizacji() {
                       {istnial ? (
                         <button
                           onClick={() => przelaczWykonanie(blok.id, tydzienStart)}
+                          title={przegapiony ? "Termin minął — nie oznaczono jako wykonane" : undefined}
                           className={`w-6 h-6 rounded-md border flex items-center justify-center mx-auto transition-colors ${
                             wykonano
                               ? "bg-green-600 border-green-600 text-white"
+                              : przegapiony
+                              ? "bg-red-50 border-red-300 text-red-500 hover:border-red-400"
                               : "border-gray-300 hover:border-gray-400"
                           }`}
                         >
-                          {wykonano && <Check size={14} />}
+                          {wykonano ? <Check size={14} /> : przegapiony ? <X size={14} /> : null}
                         </button>
                       ) : (
                         <div

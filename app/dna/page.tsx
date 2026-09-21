@@ -8,6 +8,7 @@ import { generujRekomendacje } from "../engine/recommendationEngine";
 import {
   policzKompetencje,
   policzKompetencjeZTreningu,
+  policzKompetencjeZCelowSesji,
   polaczKompetencje,
   policzWartosciFilarow,
   NAZWY_KOMPETENCJI,
@@ -18,6 +19,7 @@ import {
 import PasekTrudnosci from "../components/PasekTrudnosci";
 import WykresProgresji from "../components/WykresProgresji";
 import WykresKompetencji from "../components/Wykreskompetencji";
+import PaskiKompetencji from "../components/PaskiKompetencji";
 import TestPoziomu from "../components/TestPoziomu";
 import { Loader2 } from "lucide-react";
 
@@ -42,6 +44,11 @@ type Wykonanie = {
   blok_id: number;
 };
 
+type CelSesjiKompetencje = {
+  kompetencje: Kompetencja[];
+  wykonano: boolean;
+};
+
 type Zakladka = "trendy" | "luki" | "historia" | "test";
 type WidokKompetencji = "ogolny" | "szczegolowy";
 
@@ -49,6 +56,7 @@ export default function DNA() {
   const [sesje, setSesje] = useState<Sesja[]>([]);
   const [bloki, setBloki] = useState<Blok[]>([]);
   const [wykonania, setWykonania] = useState<Wykonanie[]>([]);
+  const [celeSesji, setCeleSesji] = useState<CelSesjiKompetencje[]>([]);
   const [ladowanie, setLadowanie] = useState(true);
   const [bladPobierania, setBladPobierania] = useState("");
   const [aktywnaZakladka, setAktywnaZakladka] = useState<Zakladka>("trendy");
@@ -59,14 +67,18 @@ export default function DNA() {
   }, []);
 
   async function pobierzDane() {
-    const [sesjeRes, blokiRes, wykonaniaRes] = await Promise.all([
+    const [sesjeRes, blokiRes, wykonaniaRes, celeSesjiRes] = await Promise.all([
       supabase.from("sesje").select("*, przejscia(*)"),
       supabase.from("bloki_tygodniowe").select("id, kompetencje"),
       supabase.from("wykonania_blokow").select("blok_id"),
+      supabase.from("cele_sesji").select("kompetencje, wykonano"),
     ]);
 
-    if (sesjeRes.error || blokiRes.error || wykonaniaRes.error) {
-      console.error("Błąd pobierania:", sesjeRes.error ?? blokiRes.error ?? wykonaniaRes.error);
+    if (sesjeRes.error || blokiRes.error || wykonaniaRes.error || celeSesjiRes.error) {
+      console.error(
+        "Błąd pobierania:",
+        sesjeRes.error ?? blokiRes.error ?? wykonaniaRes.error ?? celeSesjiRes.error
+      );
       setBladPobierania("Nie udało się pobrać danych. Sprawdź połączenie i odśwież stronę.");
       setLadowanie(false);
       return;
@@ -74,6 +86,7 @@ export default function DNA() {
     setSesje(sesjeRes.data as Sesja[]);
     setBloki(blokiRes.data as unknown as Blok[]);
     setWykonania(wykonaniaRes.data as Wykonanie[]);
+    setCeleSesji(celeSesjiRes.data as unknown as CelSesjiKompetencje[]);
     setLadowanie(false);
   }
 
@@ -81,9 +94,14 @@ export default function DNA() {
   const progresja = policzProgresje(wszystkiePrzejscia);
   const progresjaWCzasie = policzProgresjeWCzasie(sesje);
   const rekomendacje = generujRekomendacje(progresja);
+
   const kompetencjeZDrog = policzKompetencje(wszystkiePrzejscia);
   const kompetencjeZTreningu = policzKompetencjeZTreningu(bloki, wykonania);
-  const kompetencje = polaczKompetencje(kompetencjeZDrog, kompetencjeZTreningu);
+  const kompetencjeZCelowSesji = policzKompetencjeZCelowSesji(celeSesji);
+  const kompetencje = polaczKompetencje(
+    polaczKompetencje(kompetencjeZDrog, kompetencjeZTreningu),
+    kompetencjeZCelowSesji
+  );
   const wartosciFilarow = policzWartosciFilarow(kompetencje);
 
   const daneSzczegolowe = (Object.keys(kompetencje) as Kompetencja[]).map((klucz) => ({
@@ -166,6 +184,10 @@ export default function DNA() {
           <Card className="p-4">
             <WykresKompetencji dane={daneWykresuKompetencji} />
           </Card>
+
+          <div className="mt-8">
+            <PaskiKompetencji kompetencje={kompetencje} />
+          </div>
         </>
       ) : aktywnaZakladka === "luki" ? (
         <>

@@ -208,3 +208,93 @@ export function znajdzTrudnoscStartowa(
 export function zliczPrzejsciaWStylu(sesje: SesjaDoStartu[], styl?: string): number {
   return sesje.flatMap((s) => s.przejscia).filter((p) => !styl || p.styl === styl).length;
 }
+export type PunktProgresjiStylu = {
+  data: string;
+  poziomOS: number | null;
+  poziomRP: number | null;
+  poziomWedka: number | null;
+  trudnoscOS: string | null;
+  trudnoscRP: string | null;
+  trudnoscWedka: string | null;
+};
+
+type SesjaDoAnalizyStylow = {
+  data_treningu: string;
+  przejscia: { trudnosc: string; styl: string }[];
+};
+
+/**
+ * Jak policzProgresjeWCzasie, ale rozbite na trzy osobne linie
+ * (OS/RP/Wędka) — dla każdej sesji najtrudniejsze przejście w danym
+ * stylu, albo null jeśli w tej sesji nie było przejścia tym stylem.
+ */
+export function policzProgresjeWCzasiePoStylu(
+  sesje: SesjaDoAnalizyStylow[],
+  skala: SkalaTrudnosci = "kurtyki"
+): PunktProgresjiStylu[] {
+  const punkty: PunktProgresjiStylu[] = [];
+
+  for (const sesja of sesje) {
+    if (sesja.przejscia.length === 0) continue;
+
+    function najtrudniejszaWStylu(styl: string) {
+      const wStylu = sesja.przejscia.filter((p) => p.styl === styl);
+      if (wStylu.length === 0) return null;
+      return wStylu.reduce((najt, obecna) =>
+        poziomTrudnosci(obecna.trudnosc, skala) > poziomTrudnosci(najt.trudnosc, skala)
+          ? obecna
+          : najt
+      );
+    }
+
+    const os = najtrudniejszaWStylu("OS");
+    const rp = najtrudniejszaWStylu("RP");
+    const wedka = najtrudniejszaWStylu("Wędka");
+
+    if (!os && !rp && !wedka) continue;
+
+    punkty.push({
+      data: sesja.data_treningu,
+      poziomOS: os ? poziomTrudnosci(os.trudnosc, skala) : null,
+      poziomRP: rp ? poziomTrudnosci(rp.trudnosc, skala) : null,
+      poziomWedka: wedka ? poziomTrudnosci(wedka.trudnosc, skala) : null,
+      trudnoscOS: os?.trudnosc ?? null,
+      trudnoscRP: rp?.trudnosc ?? null,
+      trudnoscWedka: wedka?.trudnosc ?? null,
+    });
+  }
+
+  punkty.sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime());
+
+  return punkty;
+}
+export type PunktAktywnosciOgolny = {
+  data: string;
+  wartosc: number;
+};
+
+type SesjaDoIntensywnosciBoulderingu = {
+  data_treningu: string;
+  czas_trwania_min: number;
+  rpe: number | null;
+};
+
+/**
+ * Dla sesji boulderowych z ustawionym RPE liczy session-RPE
+ * (czas trwania w minutach × RPE) — miarę intensywności bez
+ * konieczności liczenia dróg czy posiadania zegarka.
+ */
+export function policzIntensywnoscBoulderingu(
+  sesje: SesjaDoIntensywnosciBoulderingu[]
+): PunktAktywnosciOgolny[] {
+  const punkty = sesje
+    .filter((s) => s.rpe != null)
+    .map((s) => ({
+      data: s.data_treningu,
+      wartosc: s.czas_trwania_min * (s.rpe as number),
+    }));
+
+  punkty.sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime());
+
+  return punkty;
+}

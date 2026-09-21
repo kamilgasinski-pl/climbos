@@ -5,10 +5,16 @@ import { buttonVariants } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseclient";
 import { najtrudniejszaOcena } from "../engine/gradeEngine";
-import { policzProgresje, policzProgresjeWCzasie, policzAktywnoscWCzasie } from "../engine/progressionEngine";
+import {
+  policzProgresje,
+  policzProgresjeWCzasiePoStylu,
+  policzAktywnoscWCzasie,
+  policzIntensywnoscBoulderingu,
+} from "../engine/progressionEngine";
 import PasekTrudnosci from "../components/PasekTrudnosci";
-import WykresProgresji from "../components/WykresProgresji";
+import WykresProgresjiStylow from "../components/WykresProgresjiStylow";
 import WykresAktywnosci from "../components/WykresAktywnosci";
+import WyborTypuSesji, { TypSesji } from "../components/WyborTypuSesji";
 import Link from "next/link";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
@@ -24,6 +30,10 @@ type Sesja = {
   data_treningu: string;
   miejsce: string;
   czas_trwania_min: number;
+  kalorie_spalone: number | null;
+  srednie_bpm: number | null;
+  rpe: number | null;
+  typ_sesji: TypSesji | null;
   przejscia: Przejscie[];
 };
 
@@ -32,6 +42,7 @@ export default function Logbook() {
   const [bladPobierania, setBladPobierania] = useState("");
   const [ladowanie, setLadowanie] = useState(true);
   const [rozwinieteSesje, setRozwinieteSesje] = useState<Set<number>>(new Set());
+  const [widokAktywnosci, setWidokAktywnosci] = useState<TypSesji>("sportowa");
 
   useEffect(() => {
     pobierzDane();
@@ -75,8 +86,15 @@ export default function Logbook() {
   const najtrudniejszaOS = najtrudniejszaOcena(ocenyOS) ?? "—";
 
   const progresja = policzProgresje(wszystkiePrzejscia);
-  const progresjaWCzasie = policzProgresjeWCzasie(sesje);
-  const aktywnoscWCzasie = policzAktywnoscWCzasie(sesje);
+  const progresjaWCzasie = policzProgresjeWCzasiePoStylu(sesje);
+
+  const sesjeSportowe = sesje.filter((s) => s.typ_sesji !== "bouldering");
+  const sesjeBoulderingu = sesje.filter((s) => s.typ_sesji === "bouldering");
+  const aktywnoscSportowa = policzAktywnoscWCzasie(sesjeSportowe).map((p) => ({
+    data: p.data,
+    wartosc: p.liczbaPrzejsc,
+  }));
+  const aktywnoscBoulderingu = policzIntensywnoscBoulderingu(sesjeBoulderingu);
 
   return (
     <main className="p-10 font-sans">
@@ -93,12 +111,19 @@ export default function Logbook() {
         <>
           <h2 className="text-xl font-bold mt-5">Progresja w czasie</h2>
           <Card className="p-4">
-            <WykresProgresji dane={progresjaWCzasie} />
+            <WykresProgresjiStylow dane={progresjaWCzasie} />
           </Card>
 
-          <h2 className="text-xl font-bold mt-8">Aktywność</h2>
+          <div className="flex items-center justify-between mt-8 mb-3">
+            <h2 className="text-xl font-bold">Aktywność</h2>
+            <WyborTypuSesji wartosc={widokAktywnosci} zmienTypAction={setWidokAktywnosci} />
+          </div>
           <Card className="p-4">
-            <WykresAktywnosci dane={aktywnoscWCzasie} />
+            {widokAktywnosci === "bouldering" ? (
+              <WykresAktywnosci dane={aktywnoscBoulderingu} jednostka="pkt (czas × RPE)" kolor="#9333ea" />
+            ) : (
+              <WykresAktywnosci dane={aktywnoscSportowa} jednostka="dróg" />
+            )}
           </Card>
 
           <Card className="flex gap-10 mt-5 p-5">
@@ -133,6 +158,9 @@ export default function Logbook() {
                         <div className="text-gray-500 text-sm">
                           {liczbaDrog} {liczbaDrog === 1 ? "droga" : "dróg"} · najtrudniejsza:{" "}
                           {najtrudniejszaWSesji}
+                          {s.kalorie_spalone != null && ` · 🔥 ${s.kalorie_spalone} kcal`}
+                          {s.srednie_bpm != null && ` · ❤️ ${s.srednie_bpm} bpm`}
+                          {s.rpe != null && ` · ⚡ RPE ${s.rpe}`}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">

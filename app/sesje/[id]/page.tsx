@@ -15,6 +15,7 @@ import { supabase } from "../../supabaseclient";
 import { konwertujOcene, SKALA_KURTYKI, najtrudniejszaOcena } from "../../engine/gradeEngine";
 import { minutyNaHHMM, hhmmNaMinuty } from "../../engine/czasEngine";
 import { NAZWY_KOMPETENCJI, FILARY, NAZWY_FILAROW, Kompetencja, Filar } from "../../engine/climbingKnowledgeEngine";
+import WyborTypuSesji, { TypSesji } from "../../components/WyborTypuSesji";
 import Link from "next/link";
 import { Loader2, Pencil, X, Check } from "lucide-react";
 
@@ -26,6 +27,8 @@ type Sesja = {
   notatka: string | null;
   kalorie_spalone: number | null;
   srednie_bpm: number | null;
+  typ_sesji: TypSesji;
+  rpe: number | null;
 };
 
 type Przejscie = {
@@ -50,6 +53,17 @@ type CelSesji = {
   wykonano: boolean;
 };
 
+const OPCJE_RPE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+function opisRPE(rpe: number): string {
+  if (rpe <= 2) return "bardzo lekko";
+  if (rpe <= 4) return "lekko";
+  if (rpe <= 6) return "umiarkowanie";
+  if (rpe <= 8) return "ciężko";
+  if (rpe === 9) return "bardzo ciężko";
+  return "maksymalny wysiłek";
+}
+
 function nowyWiersz(): WierszDrogi {
   return {
     klucz: crypto.randomUUID(),
@@ -71,6 +85,11 @@ export default function SzczegolySesji() {
   const [bladPobierania, setBladPobierania] = useState("");
   const [bladFormularza, setBladFormularza] = useState("");
   const [zapisywanieDrog, setZapisywanieDrog] = useState(false);
+
+  const [edycjaMiejsca, setEdycjaMiejsca] = useState(false);
+  const [miejsceTekst, setMiejsceTekst] = useState("");
+  const [zapisywanieMiejsca, setZapisywanieMiejsca] = useState(false);
+
   const [edycjaNotatki, setEdycjaNotatki] = useState(false);
   const [notatkaTekst, setNotatkaTekst] = useState("");
   const [zapisywanieNotatki, setZapisywanieNotatki] = useState(false);
@@ -83,6 +102,8 @@ export default function SzczegolySesji() {
   const [edycjaCzasu, setEdycjaCzasu] = useState(false);
   const [czasTekst, setCzasTekst] = useState("");
   const [zapisywanieCzasu, setZapisywanieCzasu] = useState(false);
+
+  const [zapisywanieRpe, setZapisywanieRpe] = useState(false);
 
   const [celeSesji, setCeleSesji] = useState<CelSesji[]>([]);
   const [nowyCelTytul, setNowyCelTytul] = useState("");
@@ -112,6 +133,7 @@ export default function SzczegolySesji() {
       return;
     }
     setSesja(data as Sesja);
+    setMiejsceTekst((data as Sesja).miejsce);
     setNotatkaTekst((data as Sesja).notatka ?? "");
     setKalorieTekst((data as Sesja).kalorie_spalone?.toString() ?? "");
     setBpmTekst((data as Sesja).srednie_bpm?.toString() ?? "");
@@ -146,6 +168,70 @@ export default function SzczegolySesji() {
       return;
     }
     setCeleSesji(data as unknown as CelSesji[]);
+  }
+
+  async function zmienTypSesji(typ: TypSesji) {
+    if (!sesja || sesja.typ_sesji === typ) return;
+
+    const poprzedniTyp = sesja.typ_sesji;
+    setSesja({ ...sesja, typ_sesji: typ });
+
+    const { error } = await supabase
+      .from("sesje")
+      .update({ typ_sesji: typ })
+      .eq("id", sesjaId);
+
+    if (error) {
+      console.error("Błąd zmiany typu sesji:", error);
+      setBladPobierania("Nie udało się zmienić typu sesji. Spróbuj ponownie.");
+      setSesja((poprzednia) => (poprzednia ? { ...poprzednia, typ_sesji: poprzedniTyp } : poprzednia));
+    }
+  }
+
+  async function ustawRpe(wartosc: number) {
+    if (!sesja) return;
+
+    const poprzednieRpe = sesja.rpe;
+    setSesja({ ...sesja, rpe: wartosc });
+    setZapisywanieRpe(true);
+
+    const { error } = await supabase
+      .from("sesje")
+      .update({ rpe: wartosc })
+      .eq("id", sesjaId);
+
+    setZapisywanieRpe(false);
+
+    if (error) {
+      console.error("Błąd zapisu RPE:", error);
+      setBladPobierania("Nie udało się zapisać RPE. Spróbuj ponownie.");
+      setSesja((poprzednia) => (poprzednia ? { ...poprzednia, rpe: poprzednieRpe } : poprzednia));
+    }
+  }
+
+  async function zapiszMiejsce() {
+    if (miejsceTekst.trim() === "") {
+      setBladPobierania("Podaj nazwę miejsca.");
+      return;
+    }
+    setBladPobierania("");
+    setZapisywanieMiejsca(true);
+
+    const { error } = await supabase
+      .from("sesje")
+      .update({ miejsce: miejsceTekst })
+      .eq("id", sesjaId);
+
+    setZapisywanieMiejsca(false);
+
+    if (error) {
+      console.error("Błąd zapisu miejsca:", error);
+      setBladPobierania("Nie udało się zapisać miejsca. Spróbuj ponownie.");
+      return;
+    }
+
+    setSesja((poprzednia) => (poprzednia ? { ...poprzednia, miejsce: miejsceTekst } : poprzednia));
+    setEdycjaMiejsca(false);
   }
 
   async function zapiszNotatke() {
@@ -360,50 +446,54 @@ export default function SzczegolySesji() {
     );
   }
 
+  const czySportowa = sesja.typ_sesji !== "bouldering";
+
   return (
     <main className="p-10 font-sans">
       <Link href="/sesje" className="text-gray-500 hover:underline">
         ← Wróć do listy sesji
       </Link>
 
-      <h1 className="text-3xl font-bold mt-4">
-        {sesja.miejsce} — {sesja.data_treningu}
-      </h1>
-      {edycjaCzasu ? (
-        <div className="flex items-center gap-2 mt-1">
+      {edycjaMiejsca ? (
+        <div className="flex items-center gap-2 mt-4">
           <Input
-            type="text"
-            value={czasTekst}
-            onChange={(e) => setCzasTekst(e.target.value)}
-            placeholder="GG:MM"
-            className="w-[100px]"
-            autoComplete="off"
+            value={miejsceTekst}
+            onChange={(e) => setMiejsceTekst(e.target.value)}
+            className="text-2xl font-bold h-11 max-w-xs"
+            autoFocus
           />
-          <Button onClick={zapiszCzas} disabled={zapisywanieCzasu} size="sm">
-            {zapisywanieCzasu ? "Zapisywanie..." : "Zapisz"}
+          <Button onClick={zapiszMiejsce} disabled={zapisywanieMiejsca} size="sm">
+            {zapisywanieMiejsca ? "Zapisywanie..." : "Zapisz"}
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
-              setCzasTekst(minutyNaHHMM(sesja.czas_trwania_min));
-              setEdycjaCzasu(false);
+              setMiejsceTekst(sesja.miejsce);
+              setEdycjaMiejsca(false);
             }}
           >
             Anuluj
           </Button>
         </div>
       ) : (
-        <div className="flex items-center gap-2">
-          <p className="text-gray-500">Czas trwania: {minutyNaHHMM(sesja.czas_trwania_min)}</p>
+        <div className="flex items-center gap-2 mt-4">
+          <h1 className="text-3xl font-bold">
+            {sesja.miejsce} — {sesja.data_treningu}
+          </h1>
           <button
-            onClick={() => setEdycjaCzasu(true)}
+            onClick={() => setEdycjaMiejsca(true)}
             className="text-gray-400 hover:text-gray-700"
           >
-            <Pencil size={14} />
+            <Pencil size={16} />
           </button>
         </div>
       )}
+
+      <div className="mt-3">
+        <WyborTypuSesji wartosc={sesja.typ_sesji ?? "sportowa"} zmienTypAction={zmienTypSesji} />
+      </div>
+
       {bladPobierania && <p className="text-red-600 mt-2">{bladPobierania}</p>}
 
       <Card className="p-4 mt-4">
@@ -446,6 +536,42 @@ export default function SzczegolySesji() {
           </div>
         )}
       </Card>
+
+      {edycjaCzasu ? (
+        <div className="flex items-center gap-2 mt-3">
+          <Input
+            type="text"
+            value={czasTekst}
+            onChange={(e) => setCzasTekst(e.target.value)}
+            placeholder="GG:MM"
+            className="w-[100px]"
+            autoComplete="off"
+          />
+          <Button onClick={zapiszCzas} disabled={zapisywanieCzasu} size="sm">
+            {zapisywanieCzasu ? "Zapisywanie..." : "Zapisz"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setCzasTekst(minutyNaHHMM(sesja.czas_trwania_min));
+              setEdycjaCzasu(false);
+            }}
+          >
+            Anuluj
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 mt-3">
+          <p className="text-gray-500">Czas trwania: {minutyNaHHMM(sesja.czas_trwania_min)}</p>
+          <button
+            onClick={() => setEdycjaCzasu(true)}
+            className="text-gray-400 hover:text-gray-700"
+          >
+            <Pencil size={14} />
+          </button>
+        </div>
+      )}
 
       <Card className="p-4 mt-4">
         {edycjaZegarka ? (
@@ -517,6 +643,50 @@ export default function SzczegolySesji() {
           </div>
         )}
       </Card>
+
+                  {!czySportowa && (
+        <Card className="p-4 mt-4">
+          <div className="text-gray-500 text-sm mb-2">
+            Intensywność sesji (RPE) — jak ciężki był dla Ciebie cały trening?
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            {OPCJE_RPE.map((wartosc) => (
+              <button
+                key={wartosc}
+                type="button"
+                onClick={() => ustawRpe(wartosc)}
+                disabled={zapisywanieRpe}
+                className={`w-9 h-9 rounded-md border flex items-center justify-center text-sm font-medium transition-colors ${
+                  sesja.rpe === wartosc
+                    ? "bg-gray-900 border-gray-900 text-white"
+                    : "border-gray-300 text-gray-600 hover:border-gray-400"
+                }`}
+              >
+                {wartosc}
+              </button>
+            ))}
+          </div>
+
+          <div className="text-xs text-gray-400 mt-2 flex flex-wrap gap-x-3 gap-y-0.5">
+            <span>1–2 — bardzo lekko</span>
+            <span>3–4 — lekko</span>
+            <span>5–6 — umiarkowanie</span>
+            <span>7–8 — ciężko</span>
+            <span>9 — bardzo ciężko</span>
+            <span>10 — maksymalny wysiłek</span>
+          </div>
+
+          {sesja.rpe != null && (
+            <div className="text-sm text-gray-500 mt-2">
+              RPE {sesja.rpe} — {opisRPE(sesja.rpe)} · session-RPE:{" "}
+              <span className="font-bold text-gray-700">
+                {sesja.czas_trwania_min * sesja.rpe}
+              </span>{" "}
+              (czas × RPE)
+            </div>
+          )}
+        </Card>
+      )}
 
       <h2 className="text-xl font-bold mt-8">Cele sesji</h2>
       <p className="text-gray-500 text-sm mt-1">
@@ -636,106 +806,110 @@ export default function SzczegolySesji() {
         </div>
       </Card>
 
-      <h2 className="text-xl font-bold mt-8">Dodaj drogi do tej sesji</h2>
-      <div className="flex flex-col gap-2 mt-3">
-        {wiersze.map((w) => (
-          <Card key={w.klucz} className="flex flex-row items-center gap-2 p-3 flex-wrap">
-            <Input
-              value={w.nazwaDrogi}
-              onChange={(e) => aktualizujWiersz(w.klucz, { nazwaDrogi: e.target.value })}
-              placeholder="Nazwa drogi"
-              className="w-[180px]"
-            />
-            <Select
-              value={w.trudnosc}
-              onValueChange={(value) => aktualizujWiersz(w.klucz, { trudnosc: value ?? "" })}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Trudność" />
-              </SelectTrigger>
-              <SelectContent>
-                {SKALA_KURTYKI.map((o) => (
-                  <SelectItem key={o} value={o}>
-                    {o}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={w.styl}
-              onValueChange={(value) => aktualizujWiersz(w.klucz, { styl: value ?? "OS" })}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="OS">OS (on-sight)</SelectItem>
-                <SelectItem value="RP">RP (redpoint)</SelectItem>
-                <SelectItem value="Wędka">Wędka (top rope)</SelectItem>
-                <SelectItem value="Boulder">Boulder</SelectItem>
-              </SelectContent>
-            </Select>
-            {wiersze.length > 1 && (
-              <button
-                onClick={() => usunWiersz(w.klucz)}
-                className="text-gray-400 hover:text-red-600 ml-auto"
-              >
-                <X size={18} />
-              </button>
-            )}
-          </Card>
-        ))}
+      {czySportowa && (
+        <>
+          <h2 className="text-xl font-bold mt-8">Dodaj drogi do tej sesji</h2>
+          <div className="flex flex-col gap-2 mt-3">
+            {wiersze.map((w) => (
+              <Card key={w.klucz} className="flex flex-row items-center gap-2 p-3 flex-wrap">
+                <Input
+                  value={w.nazwaDrogi}
+                  onChange={(e) => aktualizujWiersz(w.klucz, { nazwaDrogi: e.target.value })}
+                  placeholder="Nazwa drogi"
+                  className="w-[180px]"
+                />
+                <Select
+                  value={w.trudnosc}
+                  onValueChange={(value) => aktualizujWiersz(w.klucz, { trudnosc: value ?? "" })}
+                >
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Trudność" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SKALA_KURTYKI.map((o) => (
+                      <SelectItem key={o} value={o}>
+                        {o}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={w.styl}
+                  onValueChange={(value) => aktualizujWiersz(w.klucz, { styl: value ?? "OS" })}
+                >
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="OS">OS (on-sight)</SelectItem>
+                    <SelectItem value="RP">RP (redpoint)</SelectItem>
+                    <SelectItem value="Wędka">Wędka (top rope)</SelectItem>
+                    <SelectItem value="Boulder">Boulder</SelectItem>
+                  </SelectContent>
+                </Select>
+                {wiersze.length > 1 && (
+                  <button
+                    onClick={() => usunWiersz(w.klucz)}
+                    className="text-gray-400 hover:text-red-600 ml-auto"
+                  >
+                    <X size={18} />
+                  </button>
+                )}
+              </Card>
+            ))}
 
-        <div className="flex gap-2 mt-1">
-          <Button variant="outline" onClick={dodajWiersz}>
-            + Dodaj kolejną drogę
-          </Button>
-          <Button onClick={zapiszWszystkieDrogi} disabled={zapisywanieDrog}>
-            {zapisywanieDrog ? "Zapisywanie..." : "Zapisz drogi"}
-          </Button>
-        </div>
-      </div>
-      {bladFormularza && <p className="text-red-600 text-sm mt-2">{bladFormularza}</p>}
-
-      <h2 className="text-xl font-bold mt-8">Podsumowanie sesji</h2>
-      <Card className="p-4 flex gap-8 flex-wrap">
-        <div>
-          <div className="text-gray-500 text-sm">Liczba dróg</div>
-          <div className="text-xl font-bold">{liczbaDrog}</div>
-        </div>
-        <div>
-          <div className="text-gray-500 text-sm">Najtrudniejsza</div>
-          <div className="text-xl font-bold">{najtrudniejszaWSesji ?? "—"}</div>
-        </div>
-        <div>
-          <div className="text-gray-500 text-sm">Style</div>
-          <div className="text-sm font-medium mt-1">
-            {liczbaDrog === 0
-              ? "—"
-              : Object.entries(rozkladStylow)
-                  .map(([styl, liczba]) => `${styl}: ${liczba}`)
-                  .join(" · ")}
-          </div>
-        </div>
-      </Card>
-
-      <h2 className="text-xl font-bold mt-8">Drogi w tej sesji</h2>
-      <ul className="list-none p-0">
-        {przejscia.map((p) => (
-          <li key={p.id}>
-            <Card className="flex flex-row items-center gap-4 p-2.5">
-              <strong>{p.nazwa_drogi}</strong>
-              <span>
-                {p.trudnosc} ({konwertujOcene(p.trudnosc, "kurtyki", "francuska")})
-              </span>
-              <span>{p.styl}</span>
-              <Button variant="destructive" size="sm" onClick={() => usunPrzejscie(p.id)}>
-                Usuń
+            <div className="flex gap-2 mt-1">
+              <Button variant="outline" onClick={dodajWiersz}>
+                + Dodaj kolejną drogę
               </Button>
-            </Card>
-          </li>
-        ))}
-      </ul>
+              <Button onClick={zapiszWszystkieDrogi} disabled={zapisywanieDrog}>
+                {zapisywanieDrog ? "Zapisywanie..." : "Zapisz drogi"}
+              </Button>
+            </div>
+          </div>
+          {bladFormularza && <p className="text-red-600 text-sm mt-2">{bladFormularza}</p>}
+
+          <h2 className="text-xl font-bold mt-8">Podsumowanie sesji</h2>
+          <Card className="p-4 flex gap-8 flex-wrap">
+            <div>
+              <div className="text-gray-500 text-sm">Liczba dróg</div>
+              <div className="text-xl font-bold">{liczbaDrog}</div>
+            </div>
+            <div>
+              <div className="text-gray-500 text-sm">Najtrudniejsza</div>
+              <div className="text-xl font-bold">{najtrudniejszaWSesji ?? "—"}</div>
+            </div>
+            <div>
+              <div className="text-gray-500 text-sm">Style</div>
+              <div className="text-sm font-medium mt-1">
+                {liczbaDrog === 0
+                  ? "—"
+                  : Object.entries(rozkladStylow)
+                      .map(([styl, liczba]) => `${styl}: ${liczba}`)
+                      .join(" · ")}
+              </div>
+            </div>
+          </Card>
+
+          <h2 className="text-xl font-bold mt-8">Drogi w tej sesji</h2>
+          <ul className="list-none p-0">
+            {przejscia.map((p) => (
+              <li key={p.id}>
+                <Card className="flex flex-row items-center gap-4 p-2.5">
+                  <strong>{p.nazwa_drogi}</strong>
+                  <span>
+                    {p.trudnosc} ({konwertujOcene(p.trudnosc, "kurtyki", "francuska")})
+                  </span>
+                  <span>{p.styl}</span>
+                  <Button variant="destructive" size="sm" onClick={() => usunPrzejscie(p.id)}>
+                    Usuń
+                  </Button>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </main>
   );
 }

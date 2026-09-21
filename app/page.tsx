@@ -13,9 +13,11 @@ import {
   Kompetencja,
 } from "./engine/climbingKnowledgeEngine";
 import MegaCel from "./components/MegaCel";
+import ZblizajacyCel from "./components/ZblizajacyCel";
 import DzisiejszeAktywnosci from "./components/DzisiejszeAktywnosci";
-import PaskiKompetencji from "./components/PaskiKompetencji";
 import Link from "next/link";
+import { Mountain } from "lucide-react";
+
 
 type Przejscie = {
   id: number;
@@ -116,11 +118,14 @@ export default function Home() {
   }
 
   const wszystkiePrzejscia = sesje.flatMap((s) => s.przejscia);
-  const ocenyRP = wszystkiePrzejscia.filter((p) => p.styl === "RP").map((p) => p.trudnosc);
   const ocenyOS = wszystkiePrzejscia.filter((p) => p.styl === "OS").map((p) => p.trudnosc);
+  const ocenyRP = wszystkiePrzejscia.filter((p) => p.styl === "RP").map((p) => p.trudnosc);
+  const ocenyWedka = wszystkiePrzejscia.filter((p) => p.styl === "Wędka").map((p) => p.trudnosc);
 
-  const najtrudniejszaRP = najtrudniejszaOcena(ocenyRP);
+ 
   const najtrudniejszaOS = najtrudniejszaOcena(ocenyOS);
+  const najtrudniejszaRP = najtrudniejszaOcena(ocenyRP);
+  const najtrudniejszaWedka = najtrudniejszaOcena(ocenyWedka);
   const ostatniaSesja = sesje[0];
 
   const kompetencjeZDrog = policzKompetencje(wszystkiePrzejscia);
@@ -136,25 +141,29 @@ export default function Home() {
 
   return (
     <main className="p-10 font-sans">
-      <h1 className="text-3xl font-bold text-blue-600">Witaj w ClimbOS 🏔️</h1>
+            <h1 className="text-3xl font-bold text-blue-600 flex items-center gap-2">
+        Witaj w ClimbOS <Mountain size={28} />
+      </h1>
       <p className="text-gray-500">Twój cyfrowy trener wspinaczkowy</p>
 
       {/* Mega Cel zawsze na górze - stałe przypomnienie co mamy osiągnąć */}
       <MegaCel najtrudniejszaRP={najtrudniejszaRP} najtrudniejszaOS={najtrudniejszaOS} sesje={sesje} />
 
-      <Card className="mt-6">
-        <CardContent className="flex gap-10">
+       <ZblizajacyCel />
+
+            <Card className="mt-6">
+        <CardContent className="flex gap-10 flex-wrap">
+                    <div>
+            <div className="text-gray-500 text-sm">Najtrudniejsza OS</div>
+            <div className="text-xl font-bold">{najtrudniejszaOS ?? "—"}</div>
+          </div>
           <div>
             <div className="text-gray-500 text-sm">Najtrudniejsza RP</div>
             <div className="text-xl font-bold">{najtrudniejszaRP ?? "—"}</div>
           </div>
           <div>
-            <div className="text-gray-500 text-sm">Najtrudniejsza OS</div>
-            <div className="text-xl font-bold">{najtrudniejszaOS ?? "—"}</div>
-          </div>
-          <div>
-            <div className="text-gray-500 text-sm">Łączna liczba przejść</div>
-            <div className="text-xl font-bold">{wszystkiePrzejscia.length}</div>
+            <div className="text-gray-500 text-sm">Najtrudniejsza Wędka</div>
+            <div className="text-xl font-bold">{najtrudniejszaWedka ?? "—"}</div>
           </div>
         </CardContent>
       </Card>
@@ -184,11 +193,8 @@ export default function Home() {
         </div>
       </Card>
 
-      {/* Co dziś do zrobienia */}
-      <DzisiejszeAktywnosci onZmiana={pobierzKompetencjeTreningowe} />
-
-      {/* Postęp kompetencji w stylu RPG */}
-      <PaskiKompetencji kompetencje={profilKompetencji} />
+     {/* Co dziś do zrobienia */}
+           <DzisiejszeAktywnosci onZmianaAction={pobierzKompetencjeTreningowe} />
 
       {ostatniaSesja && (
         <div className="mt-5 p-4 bg-white border border-gray-300 rounded-lg">

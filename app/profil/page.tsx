@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Eye, EyeOff } from "lucide-react";
+import PomiaryCiala from "../components/PomiaryCiala";
+import DaneProfilu from "../components/DaneProfilu";
+
 
 export default function Profil() {
   const [haslo, setHaslo] = useState("");
@@ -99,6 +102,9 @@ export default function Profil() {
           </Button>
         </div>
       </Card>
+      
+      <DaneProfilu />
+      <PomiaryCiala />
     </main>
   );
 }

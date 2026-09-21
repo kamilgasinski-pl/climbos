@@ -24,8 +24,14 @@ type Wykonanie = {
   tydzien_start: string;
 };
 
+type CelDzienny = {
+  id: number;
+  tytul: string;
+  wykonany: boolean;
+};
+
 type Props = {
-  onZmiana?: () => void;
+  onZmianaAction?: () => void;
 };
 
 function dzisiejszyIndeks(): number {
@@ -50,13 +56,15 @@ function skroconaGodzina(godzina: string): string {
   return godzina.slice(0, 5);
 }
 
-export default function DzisiejszeAktywnosci({ onZmiana }: Props) {
+export default function DzisiejszeAktywnosci({ onZmianaAction }: Props) {
   const [bloki, setBloki] = useState<BlokDzisiaj[]>([]);
   const [wykonania, setWykonania] = useState<Wykonanie[]>([]);
+  const [celeDzienne, setCeleDzienne] = useState<CelDzienny[]>([]);
   const [ladowanie, setLadowanie] = useState(true);
   const [blad, setBlad] = useState("");
 
   const tydzienStart = toISODate(poniedzialekTygodnia(new Date()));
+  const dzisiaj = toISODate(new Date());
 
   useEffect(() => {
     pobierz();
@@ -64,23 +72,28 @@ export default function DzisiejszeAktywnosci({ onZmiana }: Props) {
   }, []);
 
   async function pobierz() {
-    const [blokiRes, wykonaniaRes] = await Promise.all([
+    const [blokiRes, wykonaniaRes, dzienneRes] = await Promise.all([
       supabase
         .from("bloki_tygodniowe")
         .select("id, godzina_start, godzina_koniec, tytul, kompetencje, kategorie_treningowe(nazwa, kolor)")
         .eq("dzien_tygodnia", dzisiejszyIndeks())
         .order("godzina_start", { ascending: true }),
       supabase.from("wykonania_blokow").select("id, blok_id, tydzien_start").eq("tydzien_start", tydzienStart),
+      supabase.from("cele_dzienne").select("id, tytul, wykonany").eq("data", dzisiaj),
     ]);
 
-    if (blokiRes.error || wykonaniaRes.error) {
-      console.error("Błąd pobierania dzisiejszych aktywności:", blokiRes.error ?? wykonaniaRes.error);
+    if (blokiRes.error || wykonaniaRes.error || dzienneRes.error) {
+      console.error(
+        "Błąd pobierania dzisiejszych aktywności:",
+        blokiRes.error ?? wykonaniaRes.error ?? dzienneRes.error
+      );
       setBlad("Nie udało się pobrać dzisiejszych aktywności.");
       setLadowanie(false);
       return;
     }
     setBloki(blokiRes.data as unknown as BlokDzisiaj[]);
     setWykonania(wykonaniaRes.data as Wykonanie[]);
+    setCeleDzienne(dzienneRes.data as CelDzienny[]);
     setLadowanie(false);
   }
 
@@ -110,10 +123,28 @@ export default function DzisiejszeAktywnosci({ onZmiana }: Props) {
       setWykonania((poprzednie) => [...poprzednie, data as Wykonanie]);
     }
 
-    onZmiana?.();
+      onZmianaAction?.();
   }
 
-  const dzisiaj = DNI_TYGODNIA[dzisiejszyIndeks()];
+  async function przelaczCelDzienny(cel: CelDzienny) {
+    const { error } = await supabase
+      .from("cele_dzienne")
+      .update({ wykonany: !cel.wykonany })
+      .eq("id", cel.id);
+
+    if (error) {
+      console.error("Błąd aktualizacji aktywności:", error);
+      setBlad("Nie udało się zaktualizować. Spróbuj ponownie.");
+      return;
+    }
+
+    setCeleDzienne((poprzednie) =>
+      poprzednie.map((c) => (c.id === cel.id ? { ...c, wykonany: !c.wykonany } : c))
+    );
+  }
+
+  const dzisiejszaNazwa = DNI_TYGODNIA[dzisiejszyIndeks()];
+  const brakCzegokolwiek = bloki.length === 0 && celeDzienne.length === 0;
 
   return (
     <Card className="p-4 mt-6">
@@ -123,7 +154,7 @@ export default function DzisiejszeAktywnosci({ onZmiana }: Props) {
           <Link href="/planner?tab=realizacja" className="text-blue-600 hover:underline text-sm">
             Zobacz w Planerze →
           </Link>
-          <span className="text-gray-400 text-sm">{dzisiaj}</span>
+          <span className="text-gray-400 text-sm">{dzisiejszaNazwa}</span>
         </div>
       </div>
 
@@ -131,7 +162,7 @@ export default function DzisiejszeAktywnosci({ onZmiana }: Props) {
         <p className="text-gray-500 text-sm">Ładowanie...</p>
       ) : blad ? (
         <p className="text-red-600 text-sm">{blad}</p>
-      ) : bloki.length === 0 ? (
+      ) : brakCzegokolwiek ? (
         <div className="text-gray-500 text-sm">
           Nic nie zaplanowano na dziś.{" "}
           <Link href="/planner?tab=harmonogram" className="text-blue-600 hover:underline">
@@ -145,7 +176,7 @@ export default function DzisiejszeAktywnosci({ onZmiana }: Props) {
             const wykonano = wykonania.some((w) => w.blok_id === b.id);
             return (
               <li
-                key={b.id}
+                key={`blok-${b.id}`}
                 className="flex items-center gap-3 rounded-md px-3 py-2"
                 style={{ backgroundColor: kolor + "1a", borderLeft: `3px solid ${kolor}` }}
               >
@@ -174,6 +205,29 @@ export default function DzisiejszeAktywnosci({ onZmiana }: Props) {
               </li>
             );
           })}
+
+          {celeDzienne.map((cel) => (
+            <li
+              key={`dzienny-${cel.id}`}
+              className="flex items-center gap-3 rounded-md px-3 py-2 bg-gray-50"
+            >
+              <button
+                onClick={() => przelaczCelDzienny(cel)}
+                className={`w-5 h-5 shrink-0 rounded-md border flex items-center justify-center transition-colors ${
+                  cel.wykonany
+                    ? "bg-green-600 border-green-600 text-white"
+                    : "border-gray-300 hover:border-gray-400"
+                }`}
+                aria-label={cel.wykonany ? "Oznacz jako niewykonane" : "Oznacz jako wykonane"}
+              >
+                {cel.wykonany && <Check size={12} />}
+              </button>
+              <span className={`text-sm font-medium ${cel.wykonany ? "line-through text-gray-400" : ""}`}>
+                {cel.tytul}
+              </span>
+              <span className="text-xs text-gray-400 ml-auto">Dodatkowe</span>
+            </li>
+          ))}
         </ul>
       )}
     </Card>

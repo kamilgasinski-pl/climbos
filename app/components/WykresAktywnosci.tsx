@@ -9,32 +9,23 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import type { PunktAktywnosci } from "../engine/progressionEngine";
+
+type Punkt = {
+  data: string;
+  wartosc: number;
+};
 
 type Props = {
-  dane: PunktAktywnosci[];
+  dane: Punkt[];
+  jednostka: string;
+  kolor?: string;
 };
 
 function formatujDate(data: string): string {
   return new Date(data).toLocaleDateString("pl-PL", { day: "numeric", month: "short" });
 }
 
-function CustomTooltip({ active, payload }: any) {
-  if (!active || !payload || payload.length === 0) return null;
-
-  const punkt = payload[0].payload as PunktAktywnosci;
-
-  return (
-    <div className="bg-white border border-gray-300 rounded-md px-3 py-2 shadow-sm">
-      <div className="text-sm text-gray-500">{formatujDate(punkt.data)}</div>
-      <div className="font-bold">
-        {punkt.liczbaPrzejsc} {punkt.liczbaPrzejsc === 1 ? "droga" : "dróg"}
-      </div>
-    </div>
-  );
-}
-
-export default function WykresAktywnosci({ dane }: Props) {
+export default function WykresAktywnosci({ dane, jednostka, kolor = "#2563eb" }: Props) {
   if (dane.length === 0) {
     return (
       <p className="text-gray-500 py-5">
@@ -57,8 +48,21 @@ export default function WykresAktywnosci({ dane }: Props) {
           tick={{ fontSize: 12, fill: "#6b7280" }}
           width={30}
         />
-        <Tooltip content={<CustomTooltip />} />
-        <Bar dataKey="liczbaPrzejsc" fill="#2563eb" radius={[4, 4, 0, 0]} />
+        <Tooltip
+          content={({ active, payload }: any) => {
+            if (!active || !payload || payload.length === 0) return null;
+            const punkt = payload[0].payload as Punkt;
+            return (
+              <div className="bg-white border border-gray-300 rounded-md px-3 py-2 shadow-sm">
+                <div className="text-sm text-gray-500">{formatujDate(punkt.data)}</div>
+                <div className="font-bold">
+                  {punkt.wartosc} {jednostka}
+                </div>
+              </div>
+            );
+          }}
+        />
+        <Bar dataKey="wartosc" fill={kolor} radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

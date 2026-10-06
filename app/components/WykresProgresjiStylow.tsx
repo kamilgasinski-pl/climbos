@@ -41,6 +41,12 @@ function CustomTooltip({ active, payload }: any) {
           RP: <strong>{punkt.trudnoscRP}</strong>
         </div>
       )}
+      {punkt.trudnoscProjekt && (
+        <div className="text-sm flex items-center gap-1.5">
+          <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: "#ea580c" }} />
+          Projekt/Przejście: <strong>{punkt.trudnoscProjekt}</strong>
+        </div>
+      )}
       {punkt.trudnoscWedka && (
         <div className="text-sm flex items-center gap-1.5">
           <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: "#9333ea" }} />
@@ -54,6 +60,7 @@ function CustomTooltip({ active, payload }: any) {
 const ETYKIETY: Record<string, string> = {
   poziomOS: "OS",
   poziomRP: "RP",
+  poziomProjekt: "Projekt/Przejście",
   poziomWedka: "Wędka",
 };
 
@@ -100,6 +107,16 @@ export default function WykresProgresjiStylow({ dane }: Props) {
           stroke="#2563eb"
           strokeWidth={2}
           dot={{ r: 4, fill: "#2563eb" }}
+          activeDot={{ r: 6 }}
+          connectNulls
+        />
+        <Line
+          type="monotone"
+          dataKey="poziomProjekt"
+          name="poziomProjekt"
+          stroke="#ea580c"
+          strokeWidth={2}
+          dot={{ r: 4, fill: "#ea580c" }}
           activeDot={{ r: 6 }}
           connectNulls
         />

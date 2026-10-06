@@ -91,9 +91,10 @@ export default function SledzenieRealizacji() {
   async function pobierzDane() {
     const [blokiRes, wykonaniaRes] = await Promise.all([
       supabase
-        .from("bloki_tygodniowe")
-        .select("id, dzien_tygodnia, tytul, created_at, kategorie_treningowe(nazwa, kolor)")
-        .order("dzien_tygodnia", { ascending: true }),
+  .from("bloki_tygodniowe")
+  .select("id, dzien_tygodnia, tytul, created_at, kategorie_treningowe(nazwa, kolor)")
+  .eq("pomijaj_w_realizacji", false)
+  .order("dzien_tygodnia", { ascending: true }),
       supabase.from("wykonania_blokow").select("id, blok_id, tydzien_start"),
     ]);
 

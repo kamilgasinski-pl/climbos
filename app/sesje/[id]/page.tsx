@@ -12,12 +12,12 @@ import {
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "../../supabaseclient";
-import { konwertujOcene, SKALA_KURTYKI, najtrudniejszaOcena } from "../../engine/gradeEngine";
 import { minutyNaHHMM, hhmmNaMinuty } from "../../engine/czasEngine";
 import { NAZWY_KOMPETENCJI, FILARY, NAZWY_FILAROW, Kompetencja, Filar } from "../../engine/climbingKnowledgeEngine";
 import WyborTypuSesji, { TypSesji } from "../../components/WyborTypuSesji";
 import Link from "next/link";
 import { Loader2, Pencil, X, Check } from "lucide-react";
+import { konwertujOcene, SKALA_KURTYKI, najtrudniejszaOcena, STOPNIE_UKONCZENIA, StopienUkonczenia, czyUkonczonaWCalosci, liczySieDoProgresji } from "../../engine/gradeEngine";
 
 type Sesja = {
   id: number;
@@ -36,6 +36,8 @@ type Przejscie = {
   nazwa_drogi: string;
   trudnosc: string;
   styl: string;
+  stopien_ukonczenia: string;
+  blok: boolean;
   sesja_id: number;
 };
 
@@ -44,6 +46,16 @@ type WierszDrogi = {
   nazwaDrogi: string;
   trudnosc: string;
   styl: string;
+  stopienUkonczenia: StopienUkonczenia;
+  blok: boolean;
+  tryb: "wlasna" | "projekt";
+  projektId: string;
+};
+
+type ProjektDoWyboru = {
+  id: number;
+  nazwa: string;
+  trudnosc: string;
 };
 
 type CelSesji = {
@@ -70,8 +82,13 @@ function nowyWiersz(): WierszDrogi {
     nazwaDrogi: "",
     trudnosc: "",
     styl: "OS",
+    stopienUkonczenia: "cala",
+    blok: false,
+    tryb: "wlasna",
+    projektId: "",
   };
 }
+
 
 export default function SzczegolySesji() {
   const params = useParams();
@@ -81,14 +98,25 @@ export default function SzczegolySesji() {
   const [przejscia, setPrzejscia] = useState<Przejscie[]>([]);
   const [ladowanie, setLadowanie] = useState(true);
 
+  const [projekty, setProjekty] = useState<ProjektDoWyboru[]>([]);
+
   const [wiersze, setWiersze] = useState<WierszDrogi[]>(() => [nowyWiersz()]);
   const [bladPobierania, setBladPobierania] = useState("");
   const [bladFormularza, setBladFormularza] = useState("");
   const [zapisywanieDrog, setZapisywanieDrog] = useState(false);
 
+  const [edytowanePrzejscieId, setEdytowanePrzejscieId] = useState<number | null>(null);
+  const [edytowanaNazwa, setEdytowanaNazwa] = useState("");
+  const [edytowanaTrudnosc, setEdytowanaTrudnosc] = useState("");
+  const [edytowanyStyl, setEdytowanyStyl] = useState("OS");
+  const [edytowanyStopienUkonczenia, setEdytowanyStopienUkonczenia] = useState<StopienUkonczenia>("cala");
+  const [edytowanyBlok, setEdytowanyBlok] = useState(false);
+  const [zapisywaniePrzejscia, setZapisywaniePrzejscia] = useState(false);
+
   const [edycjaMiejsca, setEdycjaMiejsca] = useState(false);
   const [miejsceTekst, setMiejsceTekst] = useState("");
   const [zapisywanieMiejsca, setZapisywanieMiejsca] = useState(false);
+  const [dataTekst, setDataTekst] = useState("");
 
   const [edycjaNotatki, setEdycjaNotatki] = useState(false);
   const [notatkaTekst, setNotatkaTekst] = useState("");
@@ -114,7 +142,7 @@ export default function SzczegolySesji() {
 
   useEffect(() => {
     async function pobierzWszystko() {
-      await Promise.all([pobierzSesje(), pobierzPrzejscia(), pobierzCeleSesji()]);
+      await Promise.all([pobierzSesje(), pobierzPrzejscia(), pobierzCeleSesji(), pobierzProjekty()]);
       setLadowanie(false);
     }
     pobierzWszystko();
@@ -134,6 +162,7 @@ export default function SzczegolySesji() {
     }
     setSesja(data as Sesja);
     setMiejsceTekst((data as Sesja).miejsce);
+    setDataTekst((data as Sesja).data_treningu.slice(0, 10));
     setNotatkaTekst((data as Sesja).notatka ?? "");
     setKalorieTekst((data as Sesja).kalorie_spalone?.toString() ?? "");
     setBpmTekst((data as Sesja).srednie_bpm?.toString() ?? "");
@@ -153,6 +182,20 @@ export default function SzczegolySesji() {
       return;
     }
     setPrzejscia(data as Przejscie[]);
+  }
+
+  async function pobierzProjekty() {
+    const { data, error } = await supabase
+      .from("projekty")
+      .select("id, nazwa, trudnosc")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      // Projekty to tylko podpowiedzi — brak listy nie powinien blokować strony.
+      console.error("Błąd pobierania projektów:", error);
+      return;
+    }
+    setProjekty(data as ProjektDoWyboru[]);
   }
 
   async function pobierzCeleSesji() {
@@ -210,29 +253,35 @@ export default function SzczegolySesji() {
   }
 
   async function zapiszMiejsce() {
-    if (miejsceTekst.trim() === "") {
-      setBladPobierania("Podaj nazwę miejsca.");
-      return;
-    }
-    setBladPobierania("");
-    setZapisywanieMiejsca(true);
-
-    const { error } = await supabase
-      .from("sesje")
-      .update({ miejsce: miejsceTekst })
-      .eq("id", sesjaId);
-
-    setZapisywanieMiejsca(false);
-
-    if (error) {
-      console.error("Błąd zapisu miejsca:", error);
-      setBladPobierania("Nie udało się zapisać miejsca. Spróbuj ponownie.");
-      return;
-    }
-
-    setSesja((poprzednia) => (poprzednia ? { ...poprzednia, miejsce: miejsceTekst } : poprzednia));
-    setEdycjaMiejsca(false);
+  if (miejsceTekst.trim() === "") {
+    setBladPobierania("Podaj nazwę miejsca.");
+    return;
   }
+  if (dataTekst === "") {
+    setBladPobierania("Podaj datę sesji.");
+    return;
+  }
+  setBladPobierania("");
+  setZapisywanieMiejsca(true);
+
+  const { error } = await supabase
+    .from("sesje")
+    .update({ miejsce: miejsceTekst, data_treningu: dataTekst })
+    .eq("id", sesjaId);
+
+  setZapisywanieMiejsca(false);
+
+  if (error) {
+    console.error("Błąd zapisu miejsca i daty:", error);
+    setBladPobierania("Nie udało się zapisać zmian. Spróbuj ponownie.");
+    return;
+  }
+
+  setSesja((poprzednia) =>
+    poprzednia ? { ...poprzednia, miejsce: miejsceTekst, data_treningu: dataTekst } : poprzednia
+  );
+  setEdycjaMiejsca(false);
+}
 
   async function zapiszNotatke() {
     setZapisywanieNotatki(true);
@@ -323,13 +372,32 @@ export default function SzczegolySesji() {
     );
   }
 
+  function wybierzProjekt(klucz: string, idProjektu: string) {
+    const projekt = projekty.find((p) => p.id.toString() === idProjektu);
+    if (!projekt) return;
+    aktualizujWiersz(klucz, {
+      projektId: idProjektu,
+      nazwaDrogi: projekt.nazwa,
+      trudnosc: projekt.trudnosc,
+    });
+  }
+
+  function zmienTryb(klucz: string, tryb: "wlasna" | "projekt") {
+    if (tryb === "projekt") {
+      aktualizujWiersz(klucz, { tryb, projektId: "", nazwaDrogi: "", trudnosc: "" });
+    } else {
+      // dane z wybranego projektu zostają, żeby można je było poprawić
+      aktualizujWiersz(klucz, { tryb, projektId: "" });
+    }
+  }
+
   async function zapiszWszystkieDrogi() {
     const niepoprawny = wiersze.some(
       (w) => w.nazwaDrogi.trim() === "" || w.trudnosc === ""
     );
 
     if (wiersze.length === 0 || niepoprawny) {
-      setBladFormularza("Uzupełnij nazwę i trudność dla każdej dodawanej drogi.");
+      setBladFormularza("Uzupełnij nazwę i trudność (albo wybierz projekt) dla każdej dodawanej drogi.");
       return;
     }
     setBladFormularza("");
@@ -339,6 +407,8 @@ export default function SzczegolySesji() {
       nazwa_drogi: w.nazwaDrogi,
       trudnosc: w.trudnosc,
       styl: w.styl,
+      stopien_ukonczenia: w.stopienUkonczenia,
+      blok: w.blok,
       sesja_id: sesjaId,
     }));
 
@@ -363,6 +433,55 @@ export default function SzczegolySesji() {
       setBladPobierania("Nie udało się usunąć drogi. Spróbuj ponownie.");
       return;
     }
+    pobierzPrzejscia();
+  }
+
+  function rozpocznijEdycjePrzejscia(p: Przejscie) {
+    setEdytowanePrzejscieId(p.id);
+    setEdytowanaNazwa(p.nazwa_drogi);
+    setEdytowanaTrudnosc(p.trudnosc);
+    setEdytowanyStyl(p.styl);
+    setEdytowanyStopienUkonczenia(p.stopien_ukonczenia as StopienUkonczenia);
+    setEdytowanyBlok(p.blok);
+  }
+
+  function anulujEdycjePrzejscia() {
+    setEdytowanePrzejscieId(null);
+    setEdytowanaNazwa("");
+    setEdytowanaTrudnosc("");
+    setEdytowanyStyl("OS");
+    setEdytowanyStopienUkonczenia("cala");
+    setEdytowanyBlok(false);
+  }
+
+  async function zapiszEdycjePrzejscia(id: number) {
+    if (edytowanaNazwa.trim() === "" || edytowanaTrudnosc === "") {
+      setBladPobierania("Podaj nazwę i trudność drogi.");
+      return;
+    }
+    setBladPobierania("");
+    setZapisywaniePrzejscia(true);
+
+    const { error } = await supabase
+      .from("przejscia")
+      .update({
+        nazwa_drogi: edytowanaNazwa,
+        trudnosc: edytowanaTrudnosc,
+        styl: edytowanyStyl,
+        stopien_ukonczenia: edytowanyStopienUkonczenia,
+        blok: edytowanyBlok,
+      })
+      .eq("id", id);
+
+    setZapisywaniePrzejscia(false);
+
+    if (error) {
+      console.error("Błąd edycji drogi:", error);
+      setBladPobierania("Nie udało się zapisać zmiany. Spróbuj ponownie.");
+      return;
+    }
+
+    anulujEdycjePrzejscia();
     pobierzPrzejscia();
   }
 
@@ -430,7 +549,8 @@ export default function SzczegolySesji() {
   }
 
   const liczbaDrog = przejscia.length;
-  const najtrudniejszaWSesji = najtrudniejszaOcena(przejscia.map((p) => p.trudnosc));
+  const przejsciaUkonczone = przejscia.filter((p) => liczySieDoProgresji(p));
+  const najtrudniejszaWSesji = najtrudniejszaOcena(przejsciaUkonczone.map((p) => p.trudnosc));
 
   const rozkladStylow = przejscia.reduce<Record<string, number>>((akumulator, p) => {
     akumulator[p.styl] = (akumulator[p.styl] ?? 0) + 1;
@@ -455,12 +575,18 @@ export default function SzczegolySesji() {
       </Link>
 
       {edycjaMiejsca ? (
-        <div className="flex items-center gap-2 mt-4">
+                <div className="flex items-center gap-2 mt-4 flex-wrap">
           <Input
             value={miejsceTekst}
             onChange={(e) => setMiejsceTekst(e.target.value)}
             className="text-2xl font-bold h-11 max-w-xs"
             autoFocus
+          />
+          <Input
+            type="date"
+            value={dataTekst}
+            onChange={(e) => setDataTekst(e.target.value)}
+            className="w-[170px] h-11"
           />
           <Button onClick={zapiszMiejsce} disabled={zapisywanieMiejsca} size="sm">
             {zapisywanieMiejsca ? "Zapisywanie..." : "Zapisz"}
@@ -470,6 +596,7 @@ export default function SzczegolySesji() {
             size="sm"
             onClick={() => {
               setMiejsceTekst(sesja.miejsce);
+              setDataTekst(sesja.data_treningu.slice(0, 10));
               setEdycjaMiejsca(false);
             }}
           >
@@ -812,41 +939,114 @@ export default function SzczegolySesji() {
           <div className="flex flex-col gap-2 mt-3">
             {wiersze.map((w) => (
               <Card key={w.klucz} className="flex flex-row items-center gap-2 p-3 flex-wrap">
-                <Input
-                  value={w.nazwaDrogi}
-                  onChange={(e) => aktualizujWiersz(w.klucz, { nazwaDrogi: e.target.value })}
-                  placeholder="Nazwa drogi"
-                  className="w-[180px]"
-                />
-                <Select
-                  value={w.trudnosc}
-                  onValueChange={(value) => aktualizujWiersz(w.klucz, { trudnosc: value ?? "" })}
-                >
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue placeholder="Trudność" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SKALA_KURTYKI.map((o) => (
-                      <SelectItem key={o} value={o}>
-                        {o}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {projekty.length > 0 && (
+                  <div className="flex rounded-md border border-gray-300 overflow-hidden text-sm">
+                    <button
+                      type="button"
+                      onClick={() => zmienTryb(w.klucz, "wlasna")}
+                      className={`px-3 py-1.5 ${
+                        w.tryb === "wlasna"
+                          ? "bg-gray-900 text-white"
+                          : "bg-white text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      Własna droga
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => zmienTryb(w.klucz, "projekt")}
+                      className={`px-3 py-1.5 border-l border-gray-300 ${
+                        w.tryb === "projekt"
+                          ? "bg-gray-900 text-white"
+                          : "bg-white text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      Z projektu
+                    </button>
+                  </div>
+                )}
+                {w.tryb === "projekt" ? (
+                  <Select
+                    value={w.projektId}
+                    onValueChange={(value) => wybierzProjekt(w.klucz, value ?? "")}
+                  >
+                    <SelectTrigger className="w-[260px]">
+                      <SelectValue placeholder="Wybierz projekt" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projekty.map((p) => (
+                        <SelectItem key={p.id} value={p.id.toString()}>
+                          {p.nazwa} · {p.trudnosc}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <>
+                    <Input
+                      value={w.nazwaDrogi}
+                      onChange={(e) => aktualizujWiersz(w.klucz, { nazwaDrogi: e.target.value })}
+                      placeholder="Nazwa drogi"
+                      className="w-[180px]"
+                    />
+                    <Select
+                      value={w.trudnosc}
+                      onValueChange={(value) => aktualizujWiersz(w.klucz, { trudnosc: value ?? "" })}
+                    >
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="Trudność" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SKALA_KURTYKI.map((o) => (
+                          <SelectItem key={o} value={o}>
+                            {o}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
                 <Select
                   value={w.styl}
                   onValueChange={(value) => aktualizujWiersz(w.klucz, { styl: value ?? "OS" })}
                 >
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="OS">OS (on-sight)</SelectItem>
                     <SelectItem value="RP">RP (redpoint)</SelectItem>
-                    <SelectItem value="Wędka">Wędka (top rope)</SelectItem>
-                    <SelectItem value="Boulder">Boulder</SelectItem>
+                    <SelectItem value="Flash">Flash</SelectItem>
+                    <SelectItem value="Projekt">Projekt/Próba</SelectItem>
+                    <SelectItem value="Wędka">Wędka</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select
+                  value={w.stopienUkonczenia}
+                  onValueChange={(value) =>
+                    aktualizujWiersz(w.klucz, { stopienUkonczenia: (value as StopienUkonczenia) ?? "cala" })
+                  }
+                >
+                  <SelectTrigger className="w-[130px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STOPNIE_UKONCZENIA.map((s) => (
+                      <SelectItem key={s.wartosc} value={s.wartosc}>
+                        {s.etykieta}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={w.blok}
+                    onChange={(e) => aktualizujWiersz(w.klucz, { blok: e.target.checked })}
+                    className="rounded border-gray-300"
+                  />
+                  Blok
+                </label>
                 {wiersze.length > 1 && (
                   <button
                     onClick={() => usunWiersz(w.klucz)}
@@ -891,23 +1091,111 @@ export default function SzczegolySesji() {
             </div>
           </Card>
 
-          <h2 className="text-xl font-bold mt-8">Drogi w tej sesji</h2>
-          <ul className="list-none p-0">
-            {przejscia.map((p) => (
-              <li key={p.id}>
-                <Card className="flex flex-row items-center gap-4 p-2.5">
-                  <strong>{p.nazwa_drogi}</strong>
-                  <span>
-                    {p.trudnosc} ({konwertujOcene(p.trudnosc, "kurtyki", "francuska")})
+                <h2 className="text-xl font-bold mt-8">Drogi w tej sesji</h2>
+      <ul className="list-none p-0">
+        {przejscia.map((p) =>
+          edytowanePrzejscieId === p.id ? (
+            <li key={p.id}>
+              <Card className="flex flex-row items-center gap-2 p-2.5 flex-wrap">
+                <Input
+                  value={edytowanaNazwa}
+                  onChange={(e) => setEdytowanaNazwa(e.target.value)}
+                  placeholder="Nazwa drogi"
+                  className="w-[180px]"
+                  autoFocus
+                />
+                <Select
+                  value={edytowanaTrudnosc}
+                  onValueChange={(value) => setEdytowanaTrudnosc(value ?? "")}
+                >
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Trudność" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SKALA_KURTYKI.map((o) => (
+                      <SelectItem key={o} value={o}>
+                        {o}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={edytowanyStyl} onValueChange={(value) => setEdytowanyStyl(value ?? "OS")}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="OS">OS (on-sight)</SelectItem>
+                    <SelectItem value="RP">RP (redpoint)</SelectItem>
+                    <SelectItem value="Flash">Flash</SelectItem>
+                    <SelectItem value="Projekt">Projekt/Próba</SelectItem>
+                    <SelectItem value="Wędka">Wędka</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={edytowanyStopienUkonczenia}
+                  onValueChange={(value) =>
+                    setEdytowanyStopienUkonczenia((value as StopienUkonczenia) ?? "cala")
+                  }
+                >
+                  <SelectTrigger className="w-[130px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STOPNIE_UKONCZENIA.map((s) => (
+                      <SelectItem key={s.wartosc} value={s.wartosc}>
+                        {s.etykieta}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={edytowanyBlok}
+                    onChange={(e) => setEdytowanyBlok(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  Blok
+                </label>
+                <Button size="sm" onClick={() => zapiszEdycjePrzejscia(p.id)} disabled={zapisywaniePrzejscia}>
+                  {zapisywaniePrzejscia ? "Zapisywanie..." : "Zapisz"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={anulujEdycjePrzejscia}>
+                  Anuluj
+                </Button>
+              </Card>
+            </li>
+          ) : (
+            <li key={p.id}>
+              <Card className="flex flex-row items-center gap-4 p-2.5">
+                <strong>{p.nazwa_drogi}</strong>
+                <span>
+                  {p.trudnosc} ({konwertujOcene(p.trudnosc, "kurtyki", "francuska")})
+                </span>
+                <span>{p.styl}</span>
+                {!czyUkonczonaWCalosci(p.stopien_ukonczenia) && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                    {p.stopien_ukonczenia} drogi
                   </span>
-                  <span>{p.styl}</span>
+                )}
+                {p.blok && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                    Blok
+                  </span>
+                )}
+                <div className="flex gap-2 ml-auto">
+                  <Button size="sm" variant="outline" onClick={() => rozpocznijEdycjePrzejscia(p)}>
+                    Edytuj
+                  </Button>
                   <Button variant="destructive" size="sm" onClick={() => usunPrzejscie(p.id)}>
                     Usuń
                   </Button>
-                </Card>
-              </li>
-            ))}
-          </ul>
+                </div>
+              </Card>
+            </li>
+          )
+        )}
+      </ul>
         </>
       )}
     </main>

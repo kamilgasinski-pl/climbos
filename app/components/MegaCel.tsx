@@ -3,12 +3,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseclient";
 import { SKALA_KURTYKI, najtrudniejszaOcena } from "../engine/gradeEngine";
-import {
-  policzPostepDoCelu,
-  znajdzTrudnoscStartowa,
-  zliczPrzejsciaWStylu,
-} from "../engine/progressionEngine";
+import { policzPasekPostepu } from "../engine/progressionEngine";
 import { Card } from "@/components/ui/card";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -29,23 +26,14 @@ type Cel = {
   opis_tekstowy: string | null;
 };
 
-type Przejscie = {
-  trudnosc: string;
-  styl: string;
-};
-
-type Sesja = {
-  data_treningu: string;
-  przejscia: Przejscie[];
-};
-
 type Props = {
   najtrudniejszaRP: string | null;
   najtrudniejszaOS: string | null;
-  sesje: Sesja[];
+  /** Ocena z ostatniego wykonanego testu poziomu (skala Kurtyki), punkt startowy paska */
+  trudnoscTestu: string | null;
 };
 
-export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, sesje }: Props) {
+export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, trudnoscTestu }: Props) {
   const [cel, setCel] = useState<Cel | null>(null);
   const [ladowanie, setLadowanie] = useState(true);
   const [edycja, setEdycja] = useState(false);
@@ -211,16 +199,42 @@ export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, sesje }: P
     );
   }
 
-  const wszystkieTrudnosci = sesje.flatMap((s) => s.przejscia.map((p) => p.trudnosc));
-  const trudnoscObecna = najtrudniejszaOcena(wszystkieTrudnosci);
-  const trudnoscStartowa = znajdzTrudnoscStartowa(sesje);
-  const liczbaPrzejsc = zliczPrzejsciaWStylu(sesje);
-  const postep = policzPostepDoCelu(
-    trudnoscObecna,
-    cel.trudnosc_docelowa!,
-    trudnoscStartowa,
-    liczbaPrzejsc
+  // Bez testu poziomu nie mamy wiarygodnego punktu startowego dla paska.
+  if (!trudnoscTestu) {
+    return (
+      <Card className="p-5 mt-8">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-gray-500 text-sm">
+            Mega Cel · {cel.styl_docelowy}
+          </div>
+          <button onClick={() => setEdycja(true)} className="text-gray-400 hover:text-gray-700">
+            <Pencil size={16} />
+          </button>
+        </div>
+        <div className="flex items-center gap-3 text-2xl font-bold mb-3">
+          <span className="text-gray-400">—</span>
+          <span className="text-gray-400">→</span>
+          <span className="text-blue-600">{cel.trudnosc_docelowa}</span>
+        </div>
+        <div className="text-gray-500 text-sm">
+          Zrób{" "}
+          <Link href="/dna" className="text-blue-600 hover:underline">
+            test poziomu
+          </Link>
+          , żeby zobaczyć pasek postępu do celu.
+        </div>
+      </Card>
+    );
+  }
+
+  // Aktualny poziom: test poziomu, albo zarejestrowana droga w stylu zgodnym
+  // z celem (OS/RP), jeśli jest trudniejsza niż wynik testu — bierzemy wyższą
+  // z dwóch, więc pasek automatycznie przełącza się na realne dane, gdy się pojawią.
+  const najtrudniejszaWStylu = cel.styl_docelowy === "OS" ? najtrudniejszaOS : najtrudniejszaRP;
+  const trudnoscObecna = najtrudniejszaOcena(
+    [trudnoscTestu, najtrudniejszaWStylu].filter((t): t is string => t !== null)
   );
+  const pasek = policzPasekPostepu(trudnoscTestu, trudnoscObecna, cel.trudnosc_docelowa!);
 
   return (
     <Card className="p-5 mt-8">
@@ -233,24 +247,35 @@ export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, sesje }: P
         </button>
       </div>
       <div className="flex items-center gap-3 text-2xl font-bold mb-3">
-        <span>{postep.trudnoscObecna ?? "—"}</span>
+        <span>{pasek.trudnoscObecna}</span>
         <span className="text-gray-400">→</span>
-        <span className="text-blue-600">{postep.trudnoscDocelowa}</span>
+        <span className="text-blue-600">{pasek.trudnoscDocelowa}</span>
       </div>
-      <div className="bg-gray-200 rounded h-3">
-        <div
-          className="bg-blue-600 h-full rounded transition-all"
-          style={{ width: `${postep.procentPostepu}%` }}
-        />
-      </div>
-      <div className="text-gray-500 text-sm mt-1 flex items-center gap-2">
-        <span>{postep.procentPostepu}% do celu</span>
-        {postep.malaHistoria && (
-          <span className="text-gray-400">
-            · szacunkowo, dodaj więcej sesji dla dokładniejszego trendu
-          </span>
-        )}
-      </div>
+
+      {pasek.celOsiagniety ? (
+        <div className="text-green-600 font-medium text-sm">🎉 Cel osiągnięty!</div>
+      ) : (
+        <div className="pt-1">
+          <div className="relative bg-gray-200 rounded h-2">
+            <div
+              className="bg-blue-600 h-full rounded-l transition-all"
+              style={{ width: `${pasek.procentPozycji}%` }}
+            />
+            <div
+              className="absolute top-1/2 h-4 w-4 rounded-full bg-blue-600 border-2 border-white shadow -translate-y-1/2 -translate-x-1/2 transition-all"
+              style={{ left: `${pasek.procentPozycji}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] text-gray-400 mt-1.5">
+            {pasek.kroki.map((krok) => (
+              <span key={krok}>{krok}</span>
+            ))}
+          </div>
+          <div className="text-gray-400 text-xs mt-1">
+            Start: {pasek.trudnoscStartowa} (test poziomu)
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

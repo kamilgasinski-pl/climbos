@@ -74,10 +74,11 @@ export default function DzisiejszeAktywnosci({ onZmianaAction }: Props) {
   async function pobierz() {
     const [blokiRes, wykonaniaRes, dzienneRes] = await Promise.all([
       supabase
-        .from("bloki_tygodniowe")
-        .select("id, godzina_start, godzina_koniec, tytul, kompetencje, kategorie_treningowe(nazwa, kolor)")
-        .eq("dzien_tygodnia", dzisiejszyIndeks())
-        .order("godzina_start", { ascending: true }),
+  .from("bloki_tygodniowe")
+  .select("id, godzina_start, godzina_koniec, tytul, kompetencje, kategorie_treningowe(nazwa, kolor)")
+  .eq("dzien_tygodnia", dzisiejszyIndeks())
+  .eq("pomijaj_w_realizacji", false)
+  .order("godzina_start", { ascending: true }),
       supabase.from("wykonania_blokow").select("id, blok_id, tydzien_start").eq("tydzien_start", tydzienStart),
       supabase.from("cele_dzienne").select("id, tytul, wykonany").eq("data", dzisiaj),
     ]);

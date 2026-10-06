@@ -16,8 +16,6 @@ import MegaCel from "./components/MegaCel";
 import ZblizajacyCel from "./components/ZblizajacyCel";
 import DzisiejszeAktywnosci from "./components/DzisiejszeAktywnosci";
 import Link from "next/link";
-import { Mountain } from "lucide-react";
-
 
 type Przejscie = {
   id: number;
@@ -118,14 +116,19 @@ export default function Home() {
   }
 
   const wszystkiePrzejscia = sesje.flatMap((s) => s.przejscia);
-  const ocenyOS = wszystkiePrzejscia.filter((p) => p.styl === "OS").map((p) => p.trudnosc);
   const ocenyRP = wszystkiePrzejscia.filter((p) => p.styl === "RP").map((p) => p.trudnosc);
+  const ocenyOS = wszystkiePrzejscia.filter((p) => p.styl === "OS").map((p) => p.trudnosc);
   const ocenyWedka = wszystkiePrzejscia.filter((p) => p.styl === "Wędka").map((p) => p.trudnosc);
 
- 
-  const najtrudniejszaOS = najtrudniejszaOcena(ocenyOS);
   const najtrudniejszaRP = najtrudniejszaOcena(ocenyRP);
+  const najtrudniejszaOS = najtrudniejszaOcena(ocenyOS);
   const najtrudniejszaWedka = najtrudniejszaOcena(ocenyWedka);
+
+  const liczbaWedka = wszystkiePrzejscia.filter((p) => p.styl === "Wędka").length;
+  const liczbaZDolem = wszystkiePrzejscia.filter(
+    (p) => p.styl === "OS" || p.styl === "RP" || p.styl === "Projekt"
+  ).length;
+
   const ostatniaSesja = sesje[0];
 
   const kompetencjeZDrog = policzKompetencje(wszystkiePrzejscia);
@@ -141,19 +144,21 @@ export default function Home() {
 
   return (
     <main className="p-10 font-sans">
-            <h1 className="text-3xl font-bold text-blue-600 flex items-center gap-2">
-        Witaj w ClimbOS <Mountain size={28} />
-      </h1>
+      <h1 className="text-3xl font-bold text-blue-600">Witaj w ClimbOS 🏔️</h1>
       <p className="text-gray-500">Twój cyfrowy trener wspinaczkowy</p>
 
       {/* Mega Cel zawsze na górze - stałe przypomnienie co mamy osiągnąć */}
-      <MegaCel najtrudniejszaRP={najtrudniejszaRP} najtrudniejszaOS={najtrudniejszaOS} sesje={sesje} />
+      <MegaCel
+  najtrudniejszaRP={najtrudniejszaRP}
+  najtrudniejszaOS={najtrudniejszaOS}
+  trudnoscTestu={najnowszyTest?.ocena_koncowa ?? null}
+/>
 
-       <ZblizajacyCel />
+      <ZblizajacyCel />
 
-            <Card className="mt-6">
+      <Card className="mt-6">
         <CardContent className="flex gap-10 flex-wrap">
-                    <div>
+          <div>
             <div className="text-gray-500 text-sm">Najtrudniejsza OS</div>
             <div className="text-xl font-bold">{najtrudniejszaOS ?? "—"}</div>
           </div>
@@ -164,6 +169,18 @@ export default function Home() {
           <div>
             <div className="text-gray-500 text-sm">Najtrudniejsza Wędka</div>
             <div className="text-xl font-bold">{najtrudniejszaWedka ?? "—"}</div>
+          </div>
+          <div>
+            <div className="text-gray-500 text-sm">Łącznie przejść Wędka</div>
+            <div className="text-xl font-bold">{liczbaWedka}</div>
+          </div>
+          <div>
+            <div className="text-gray-500 text-sm">Łącznie przejść z dołem</div>
+            <div className="text-xl font-bold">{liczbaZDolem}</div>
+          </div>
+          <div>
+            <div className="text-gray-500 text-sm">Łączna liczba przejść</div>
+            <div className="text-xl font-bold">{wszystkiePrzejscia.length}</div>
           </div>
         </CardContent>
       </Card>
@@ -193,12 +210,12 @@ export default function Home() {
         </div>
       </Card>
 
-     {/* Co dziś do zrobienia */}
-           <DzisiejszeAktywnosci onZmianaAction={pobierzKompetencjeTreningowe} />
+      {/* Co dziś do zrobienia */}
+      <DzisiejszeAktywnosci onZmianaAction={pobierzKompetencjeTreningowe} />
 
       {ostatniaSesja && (
         <div className="mt-5 p-4 bg-white border border-gray-300 rounded-lg">
-          <div className="text-gray-500 text-sm">Ostatnia sesja</div>
+          <div className="text-gray-500 text-sm">Następna sesja treningowa</div>
           <div className="text-lg font-bold">
             {ostatniaSesja.miejsce} — {ostatniaSesja.data_treningu}
           </div>

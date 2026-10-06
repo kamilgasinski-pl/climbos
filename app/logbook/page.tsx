@@ -4,25 +4,27 @@ import { Card } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseclient";
-import { najtrudniejszaOcena } from "../engine/gradeEngine";
 import {
-  policzProgresje,
+  policzProgresjeProsta,
   policzProgresjeWCzasiePoStylu,
   policzAktywnoscWCzasie,
   policzIntensywnoscBoulderingu,
 } from "../engine/progressionEngine";
-import PasekTrudnosci from "../components/PasekTrudnosci";
+import PasekTrudnosciProsty from "../components/PasekTrudnosciProsty";
 import WykresProgresjiStylow from "../components/WykresProgresjiStylow";
 import WykresAktywnosci from "../components/WykresAktywnosci";
 import WyborTypuSesji, { TypSesji } from "../components/WyborTypuSesji";
 import Link from "next/link";
 import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { najtrudniejszaOcena, czyUkonczonaWCalosci, liczySieDoProgresji } from "../engine/gradeEngine";
 
 type Przejscie = {
   id: number;
   nazwa_drogi: string;
   trudnosc: string;
   styl: string;
+  stopien_ukonczenia: string;
+  blok: boolean;
 };
 
 type Sesja = {
@@ -79,14 +81,27 @@ export default function Logbook() {
   const wszystkiePrzejscia = sesje.flatMap((s) => s.przejscia);
   const calkowitaLiczbaPrzejsc = wszystkiePrzejscia.length;
 
-  const ocenyRP = wszystkiePrzejscia.filter((p) => p.styl === "RP").map((p) => p.trudnosc);
-  const ocenyOS = wszystkiePrzejscia.filter((p) => p.styl === "OS").map((p) => p.trudnosc);
+  const przejsciaUkonczone = wszystkiePrzejscia.filter((p) => czyUkonczonaWCalosci(p.stopien_ukonczenia));
+
+  const ocenyRP = przejsciaUkonczone.filter((p) => p.styl === "RP").map((p) => p.trudnosc);
+  const ocenyOS = przejsciaUkonczone.filter((p) => p.styl === "OS").map((p) => p.trudnosc);
+  const ocenyWedka = przejsciaUkonczone.filter((p) => p.styl === "Wędka").map((p) => p.trudnosc);
 
   const najtrudniejszaRP = najtrudniejszaOcena(ocenyRP) ?? "—";
   const najtrudniejszaOS = najtrudniejszaOcena(ocenyOS) ?? "—";
+  const najtrudniejszaWedka = najtrudniejszaOcena(ocenyWedka) ?? "—";
 
-  const progresja = policzProgresje(wszystkiePrzejscia);
-  const progresjaWCzasie = policzProgresjeWCzasiePoStylu(sesje);
+  const liczbaWedka = wszystkiePrzejscia.filter((p) => p.styl === "Wędka").length;
+  const liczbaZDolem = wszystkiePrzejscia.filter(
+    (p) => p.styl === "OS" || p.styl === "RP" || p.styl === "Projekt"
+  ).length;
+
+  const progresja = policzProgresjeProsta(przejsciaUkonczone);
+  const sesjeUkonczone = sesje.map((s) => ({
+    ...s,
+    przejscia: s.przejscia.filter((p) => czyUkonczonaWCalosci(p.stopien_ukonczenia)),
+  }));
+  const progresjaWCzasie = policzProgresjeWCzasiePoStylu(sesjeUkonczone);
 
   const sesjeSportowe = sesje.filter((s) => s.typ_sesji !== "bouldering");
   const sesjeBoulderingu = sesje.filter((s) => s.typ_sesji === "bouldering");
@@ -126,17 +141,29 @@ export default function Logbook() {
             )}
           </Card>
 
-          <Card className="flex gap-10 mt-5 p-5">
-            <div>
-              <div className="text-gray-500 text-sm">Najtrudniejsza RP</div>
-              <div className="text-xl font-bold">{najtrudniejszaRP}</div>
-            </div>
+          <Card className="flex gap-10 mt-5 p-5 flex-wrap">
             <div>
               <div className="text-gray-500 text-sm">Najtrudniejsza OS</div>
               <div className="text-xl font-bold">{najtrudniejszaOS}</div>
             </div>
             <div>
-              <div className="text-gray-500 text-sm">Całkowita liczba przejść</div>
+              <div className="text-gray-500 text-sm">Najtrudniejsza RP</div>
+              <div className="text-xl font-bold">{najtrudniejszaRP}</div>
+            </div>
+            <div>
+              <div className="text-gray-500 text-sm">Najtrudniejsza Wędka</div>
+              <div className="text-xl font-bold">{najtrudniejszaWedka}</div>
+            </div>
+            <div>
+              <div className="text-gray-500 text-sm">Łącznie przejść Wędka</div>
+              <div className="text-xl font-bold">{liczbaWedka}</div>
+            </div>
+            <div>
+              <div className="text-gray-500 text-sm">Łącznie przejść z dołem</div>
+              <div className="text-xl font-bold">{liczbaZDolem}</div>
+            </div>
+            <div>
+              <div className="text-gray-500 text-sm">Łączna liczba przejść</div>
               <div className="text-xl font-bold">{calkowitaLiczbaPrzejsc}</div>
             </div>
           </Card>
@@ -145,7 +172,9 @@ export default function Logbook() {
           <ul className="list-none p-0">
             {sesje.map((s) => {
               const liczbaDrog = s.przejscia.length;
-              const oceny = s.przejscia.map((p) => p.trudnosc);
+              const oceny = s.przejscia
+              .filter((p) => liczySieDoProgresji(p))
+              .map((p) => p.trudnosc);
               const najtrudniejszaWSesji = najtrudniejszaOcena(oceny) ?? "—";
               const rozwinieta = rozwinieteSesje.has(s.id);
 
@@ -153,14 +182,20 @@ export default function Logbook() {
                 <li key={s.id}>
                   <Card className="p-3.5">
                     <div className="flex flex-row items-center justify-between">
-                      <div>
-                        <strong>{s.miejsce}</strong> — {s.data_treningu}
-                        <div className="text-gray-500 text-sm">
-                          {liczbaDrog} {liczbaDrog === 1 ? "droga" : "dróg"} · najtrudniejsza:{" "}
-                          {najtrudniejszaWSesji}
+                                            <div>
+                        <strong>{s.data_treningu}</strong> — {s.miejsce}{" "}
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 align-middle">
+                          {s.typ_sesji === "bouldering" ? "Bouldering" : "Wspinaczka"}
+                        </span>{" "}
+                        <span className="text-gray-500">
+                          ({s.czas_trwania_min} min
                           {s.kalorie_spalone != null && ` · 🔥 ${s.kalorie_spalone} kcal`}
                           {s.srednie_bpm != null && ` · ❤️ ${s.srednie_bpm} bpm`}
-                          {s.rpe != null && ` · ⚡ RPE ${s.rpe}`}
+                          {s.rpe != null && ` · ⚡ RPE ${s.rpe}`})
+                        </span>
+                        <div className="text-gray-500 text-sm mt-0.5">
+                          {liczbaDrog} {liczbaDrog === 1 ? "droga" : "dróg"} · najtrudniejsza:{" "}
+                          {najtrudniejszaWSesji}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -189,6 +224,16 @@ export default function Logbook() {
                               <strong>{p.nazwa_drogi}</strong>
                               <span className="text-gray-500">{p.trudnosc}</span>
                               <span className="text-gray-500">{p.styl}</span>
+                              {!czyUkonczonaWCalosci(p.stopien_ukonczenia) && (
+  <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+    {p.stopien_ukonczenia} drogi
+  </span>
+)}
+{p.blok && (
+  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+    Blok
+  </span>
+)}
                             </div>
                           ))
                         )}
@@ -203,7 +248,7 @@ export default function Logbook() {
           <h2 className="text-xl font-bold mt-8">Progresja na skali Kurtyki</h2>
           <Card className="px-4 py-2">
             {progresja.map((w) => (
-              <PasekTrudnosci key={w.trudnosc} wynik={w} />
+              <PasekTrudnosciProsty key={w.trudnosc} wynik={w} />
             ))}
           </Card>
         </>

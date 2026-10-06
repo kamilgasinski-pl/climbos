@@ -1,15 +1,17 @@
-// Skala Kurtyki (polska) jako punkt odniesienia
+// Skala Kurtyki (polska) jako punkt odniesienia — pełna skala z wariantami +/-
 export const SKALA_KURTYKI = [
-  "III", "III+", "IV", "IV+", "V", "V+",
-  "VI", "VI+", "VI.1", "VI.2", "VI.3", "VI.4", "VI.5",
-  "VI.6", "VI.7", "VII", "VII+", "VIII", "VIII+", "IX",
+  "I", "II", "II+", "III", "IV", "IV+", "V-", "V", "V+",
+  "VI-", "VI", "VI+", "VI.1", "VI.1+", "VI.2", "VI.2+",
+  "VI.3", "VI.3+", "VI.4", "VI.4+", "VI.5", "VI.5+",
+  "VI.6", "VI.6+", "VI.7", "VI.7+", "VI.8", "VI.8+",
 ];
 
-// Odpowiadająca jej skala francuska (ten sam indeks = ten sam poziom)
+// Odpowiadająca jej skala francuska (ten sam indeks = ten sam poziom, przybliżenie)
 const SKALA_FRANCUSKA = [
-  "4a", "4b", "4c", "5a", "5b", "5c",
-  "6a", "6a+", "6b", "6b+", "6c", "6c+", "7a",
-  "7a+", "7b", "7b+", "7c", "7c+", "8a", "8a+",
+  "1", "2", "3", "4a", "4b", "4c", "5a", "5b", "5c",
+  "6a-", "6a", "6a+", "6b", "6b+", "6c", "6c+",
+  "7a", "7a+", "7b", "7b+", "7c", "7c+",
+  "8a", "8a+", "8b", "8b+", "8c", "8c+",
 ];
 
 export type SkalaTrudnosci = "kurtyki" | "francuska";
@@ -90,4 +92,25 @@ export function sumaWagMiedzyPoziomami(poziomOd: number, poziomDo: number): numb
     suma += wagaPoziomu(p);
   }
   return suma;
+}
+
+export type StopienUkonczenia = "1/4" | "1/2" | "3/4" | "cala";
+
+export const STOPNIE_UKONCZENIA: { wartosc: StopienUkonczenia; etykieta: string }[] = [
+  { wartosc: "1/4", etykieta: "1/4" },
+  { wartosc: "1/2", etykieta: "1/2" },
+  { wartosc: "3/4", etykieta: "3/4" },
+  { wartosc: "cala", etykieta: "Cała droga" },
+];
+
+/**
+ * Tylko drogi ukończone w całości liczą się jako realnie osiągnięta trudność —
+ * próby na 1/4, 1/2 czy 3/4 drogi nie powinny wpływać na statystyki progresji
+ * (najtrudniejsza ocena, status opanowania itd.), żeby nie zawyżać wyniku.
+ */
+export function czyUkonczonaWCalosci(stopien: string): boolean {
+  return stopien === "cala" || stopien === "cała";
+}
+export function liczySieDoProgresji(przejscie: { stopien_ukonczenia: string; blok: boolean }): boolean {
+  return czyUkonczonaWCalosci(przejscie.stopien_ukonczenia) && !przejscie.blok;
 }

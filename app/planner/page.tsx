@@ -10,6 +10,7 @@ import HarmonogramTygodniowy from "../components/HarmonogramTygodniowy";
 import SledzenieRealizacji from "../components/SledzenieRealizacji";
 import PiramidaCelow from "../components/PiramidaCelow";
 import { useSearchParams } from "next/navigation";
+import Projekty from "../components/Projekty";
 
 type Sesja = {
   id: number;
@@ -25,7 +26,7 @@ type Grupa = {
 };
 
 type ZakresWidoku = "dzien" | "tydzien" | "miesiac";
-type Zakladka = "sesje" | "harmonogram" | "realizacja" | "cele";
+type Zakladka = "sesje" | "harmonogram" | "realizacja" | "cele" | "projekty";
 
 function poczatekTygodnia(data: Date): Date {
   const kopia = new Date(data);
@@ -103,7 +104,12 @@ function pogrupujWgWidoku(sesje: Sesja[], widok: ZakresWidoku): Grupa[] {
 }
 
 function poprawnaZakladka(wartosc: string | null): Zakladka {
-  if (wartosc === "harmonogram" || wartosc === "realizacja" || wartosc === "cele") {
+   if (
+    wartosc === "harmonogram" ||
+    wartosc === "realizacja" ||
+    wartosc === "cele" ||
+    wartosc === "projekty"
+  ) {
     return wartosc;
   }
   return "sesje";
@@ -206,6 +212,12 @@ export default function Planner() {
         >
           Cele
         </Button>
+         <Button
+          variant={aktywnaZakladka === "projekty" ? "default" : "outline"}
+          onClick={() => setAktywnaZakladka("projekty")}
+        >
+          Projekty
+        </Button>
       </div>
 
       {aktywnaZakladka === "harmonogram" ? (
@@ -216,9 +228,13 @@ export default function Planner() {
         <div className="mt-5">
           <SledzenieRealizacji />
         </div>
-       ) : aktywnaZakladka === "cele" ? (
+             ) : aktywnaZakladka === "cele" ? (
         <div className="mt-5">
           <PiramidaCelow />
+        </div>
+      ) : aktywnaZakladka === "projekty" ? (
+        <div className="mt-5">
+          <Projekty />
         </div>
       ) : (
         <>

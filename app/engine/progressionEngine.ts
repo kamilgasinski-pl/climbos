@@ -1,4 +1,4 @@
-import { poziomTrudnosci, SkalaTrudnosci, sumaWagMiedzyPoziomami } from "./gradeEngine";
+import { poziomTrudnosci, SkalaTrudnosci, sumaWagMiedzyPoziomami, SKALA_KURTYKI } from "./gradeEngine";
 
 export type StatusOpanowania = "nieosiagniety" | "projekt" | "rozwijany" | "opanowany";
 
@@ -57,6 +57,49 @@ export function policzProgresje(
 
   return wyniki;
 }
+
+export type WynikTrudnosciProsty = {
+  trudnosc: string;
+  liczbaWedka: number;
+  liczbaZDolem: number;
+};
+
+type PrzejscieDoAnalizyProstej = {
+  trudnosc: string;
+  styl: string;
+};
+
+/**
+ * Uproszczona wersja policzProgresje: zamiast statusu opanowania i gwiazdek,
+ * dla każdej trudności zwraca po prostu liczbę przejść w stylu "Wędka"
+ * i liczbę przejść "z dołem" (wszystko poza Wędką - OS, RP, Projekt itd.).
+ */
+export function policzProgresjeProsta(
+  przejscia: PrzejscieDoAnalizyProstej[],
+  skala: SkalaTrudnosci = "kurtyki"
+): WynikTrudnosciProsty[] {
+  const mapa = new Map<string, { liczbaWedka: number; liczbaZDolem: number }>();
+
+  for (const p of przejscia) {
+    const wpis = mapa.get(p.trudnosc) ?? { liczbaWedka: 0, liczbaZDolem: 0 };
+    if (p.styl === "Wędka") {
+      wpis.liczbaWedka += 1;
+    } else {
+      wpis.liczbaZDolem += 1;
+    }
+    mapa.set(p.trudnosc, wpis);
+  }
+
+  const wyniki: WynikTrudnosciProsty[] = [];
+  for (const [trudnosc, { liczbaWedka, liczbaZDolem }] of mapa.entries()) {
+    wyniki.push({ trudnosc, liczbaWedka, liczbaZDolem });
+  }
+
+  wyniki.sort((a, b) => poziomTrudnosci(a.trudnosc, skala) - poziomTrudnosci(b.trudnosc, skala));
+
+  return wyniki;
+}
+
 export type PunktProgresji = {
   data: string;
   trudnosc: string;
@@ -213,9 +256,11 @@ export type PunktProgresjiStylu = {
   poziomOS: number | null;
   poziomRP: number | null;
   poziomWedka: number | null;
+  poziomProjekt: number | null;
   trudnoscOS: string | null;
   trudnoscRP: string | null;
   trudnoscWedka: string | null;
+  trudnoscProjekt: string | null;
 };
 
 type SesjaDoAnalizyStylow = {
@@ -250,17 +295,20 @@ export function policzProgresjeWCzasiePoStylu(
     const os = najtrudniejszaWStylu("OS");
     const rp = najtrudniejszaWStylu("RP");
     const wedka = najtrudniejszaWStylu("Wędka");
+    const projekt = najtrudniejszaWStylu("Projekt");
 
-    if (!os && !rp && !wedka) continue;
+    if (!os && !rp && !wedka && !projekt) continue;
 
     punkty.push({
       data: sesja.data_treningu,
       poziomOS: os ? poziomTrudnosci(os.trudnosc, skala) : null,
       poziomRP: rp ? poziomTrudnosci(rp.trudnosc, skala) : null,
       poziomWedka: wedka ? poziomTrudnosci(wedka.trudnosc, skala) : null,
+      poziomProjekt: projekt ? poziomTrudnosci(projekt.trudnosc, skala) : null,
       trudnoscOS: os?.trudnosc ?? null,
       trudnoscRP: rp?.trudnosc ?? null,
       trudnoscWedka: wedka?.trudnosc ?? null,
+      trudnoscProjekt: projekt?.trudnosc ?? null,
     });
   }
 
@@ -297,4 +345,76 @@ export function policzIntensywnoscBoulderingu(
   punkty.sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime());
 
   return punkty;
+}
+
+export type PasekPostepu = {
+  trudnoscStartowa: string;
+  trudnoscObecna: string | null;
+  trudnoscDocelowa: string;
+  poziomStartowy: number;
+  poziomObecny: number | null;
+  poziomDocelowy: number;
+  /** Kolejne stopnie skali między startem a celem (włącznie), do podziałki paska */
+  kroki: string[];
+  /** Pozycja obecnego poziomu na pasku, liniowo 0-100 (nie ważona wykładniczo) */
+  procentPozycji: number;
+  celOsiagniety: boolean;
+};
+
+/**
+ * Liczy pozycję na pasku postępu do Mega Celu (typ "poziom"), zamiast %
+ * postępu liczonego wagą wysiłku. Start ustalony na podstawie testu
+ * poziomu (realny, zmierzony punkt odniesienia zamiast pierwszego
+ * zarejestrowanego przejścia), obecna pozycja na podstawie najtrudniejszej
+ * zarejestrowanej drogi w stylu zgodnym z celem (OS/RP). Pozycja na pasku
+ * jest liniowa względem liczby stopni skali między startem a celem —
+ * prostsze i łatwiejsze w utrzymaniu niż wykładnicze ważenie wysiłku.
+ */
+export function policzPasekPostepu(
+  trudnoscStartowa: string,
+  trudnoscObecna: string | null,
+  trudnoscDocelowa: string,
+  skala: SkalaTrudnosci = "kurtyki"
+): PasekPostepu {
+  const poziomStartowy = poziomTrudnosci(trudnoscStartowa, skala);
+  const poziomDocelowy = poziomTrudnosci(trudnoscDocelowa, skala);
+  const poziomObecny = trudnoscObecna !== null ? poziomTrudnosci(trudnoscObecna, skala) : null;
+
+  const celOsiagniety = poziomObecny !== null && poziomObecny >= poziomDocelowy;
+
+  if (poziomDocelowy <= poziomStartowy) {
+    // Cel na poziomie testu lub niżej - traktujemy jako już osiągnięty,
+    // nie ma sensownego odcinka do pokazania na pasku.
+    return {
+      trudnoscStartowa,
+      trudnoscObecna,
+      trudnoscDocelowa,
+      poziomStartowy,
+      poziomObecny,
+      poziomDocelowy,
+      kroki: [trudnoscStartowa],
+      procentPozycji: 100,
+      celOsiagniety: true,
+    };
+  }
+
+  const kroki = SKALA_KURTYKI.slice(poziomStartowy, poziomDocelowy + 1);
+
+  let procentPozycji = 0;
+  if (poziomObecny !== null) {
+    const ograniczony = Math.max(poziomStartowy, Math.min(poziomDocelowy, poziomObecny));
+    procentPozycji = ((ograniczony - poziomStartowy) / (poziomDocelowy - poziomStartowy)) * 100;
+  }
+
+  return {
+    trudnoscStartowa,
+    trudnoscObecna,
+    trudnoscDocelowa,
+    poziomStartowy,
+    poziomObecny,
+    poziomDocelowy,
+    kroki,
+    procentPozycji,
+    celOsiagniety,
+  };
 }

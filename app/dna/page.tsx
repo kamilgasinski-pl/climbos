@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseclient";
-import { policzProgresje, policzProgresjeWCzasie } from "../engine/progressionEngine";
+import { policzProgresje, policzProgresjeProsta, policzProgresjeWCzasie } from "../engine/progressionEngine";
 import { generujRekomendacje } from "../engine/recommendationEngine";
 import {
   policzKompetencje,
@@ -16,17 +16,21 @@ import {
   Kompetencja,
   Filar,
 } from "../engine/climbingKnowledgeEngine";
-import PasekTrudnosci from "../components/PasekTrudnosci";
+import PasekTrudnosciProsty from "../components/PasekTrudnosciProsty";
 import WykresProgresji from "../components/WykresProgresji";
 import WykresKompetencji from "../components/Wykreskompetencji";
 import PaskiKompetencji from "../components/PaskiKompetencji";
 import TestPoziomu from "../components/TestPoziomu";
 import { Loader2 } from "lucide-react";
+import WykresPomiarowCiala from "../components/WykresPomiarowCiala";
+import { liczySieDoProgresji } from "../engine/gradeEngine";
 
 type Przejscie = {
   id: number;
   trudnosc: string;
   styl: string;
+  stopien_ukonczenia: string;
+  blok: boolean;
 };
 
 type Sesja = {
@@ -61,6 +65,7 @@ export default function DNA() {
   const [bladPobierania, setBladPobierania] = useState("");
   const [aktywnaZakladka, setAktywnaZakladka] = useState<Zakladka>("trendy");
   const [widokKompetencji, setWidokKompetencji] = useState<WidokKompetencji>("ogolny");
+  
 
   useEffect(() => {
     pobierzDane();
@@ -91,9 +96,16 @@ export default function DNA() {
   }
 
   const wszystkiePrzejscia = sesje.flatMap((s) => s.przejscia);
-  const progresja = policzProgresje(wszystkiePrzejscia);
-  const progresjaWCzasie = policzProgresjeWCzasie(sesje);
-  const rekomendacje = generujRekomendacje(progresja);
+  const przejsciaUkonczone = wszystkiePrzejscia.filter((p) => liczySieDoProgresji(p));
+
+  const progresjaSzczegolowa = policzProgresje(przejsciaUkonczone);
+  const progresja = policzProgresjeProsta(przejsciaUkonczone);
+  const sesjeUkonczone = sesje.map((s) => ({
+    ...s,
+    przejscia: s.przejscia.filter((p) => liczySieDoProgresji(p)),
+  }));
+  const progresjaWCzasie = policzProgresjeWCzasie(sesjeUkonczone);
+  const rekomendacje = generujRekomendacje(progresjaSzczegolowa);
 
   const kompetencjeZDrog = policzKompetencje(wszystkiePrzejscia);
   const kompetencjeZTreningu = policzKompetencjeZTreningu(bloki, wykonania);
@@ -185,9 +197,12 @@ export default function DNA() {
             <WykresKompetencji dane={daneWykresuKompetencji} />
           </Card>
 
-          <div className="mt-8">
+                    <div className="mt-8">
             <PaskiKompetencji kompetencje={kompetencje} />
           </div>
+
+          <h2 className="text-xl font-bold mt-8 mb-3">Skład ciała</h2>
+          <WykresPomiarowCiala />
         </>
       ) : aktywnaZakladka === "luki" ? (
         <>
@@ -216,12 +231,12 @@ export default function DNA() {
                 Brak danych — dodaj kilka przejść w Logbooku, żeby zobaczyć progresję.
               </p>
             ) : (
-              progresja.map((w) => <PasekTrudnosci key={w.trudnosc} wynik={w} />)
+              progresja.map((w) => <PasekTrudnosciProsty key={w.trudnosc} wynik={w} />)
             )}
           </Card>
         </>
       ) : (
-        <TestPoziomu przejscia={wszystkiePrzejscia} />
+        <TestPoziomu przejscia={przejsciaUkonczone} />
       )}
     </main>
   );

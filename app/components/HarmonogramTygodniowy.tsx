@@ -22,6 +22,7 @@ type Blok = {
   kategoria_id: number | null;
   kompetencje: Kompetencja[] | null;
   notatka: string | null;
+  pomijaj_w_realizacji: boolean;
   kategorie_treningowe: { nazwa: string; kolor: string } | null;
 };
 
@@ -71,6 +72,7 @@ export default function HarmonogramTygodniowy() {
   const [wybraneKompetencje, setWybraneKompetencje] = useState<Kompetencja[]>([]);
   const [pokazKompetencje, setPokazKompetencje] = useState(false);
   const [notatkaTekst, setNotatkaTekst] = useState("");
+  const [pomijajWRealizacji, setPomijajWRealizacji] = useState(false);
   const [edytowanyBlokId, setEdytowanyBlokId] = useState<number | null>(null);
   const [bladFormularza, setBladFormularza] = useState("");
   const [zapisywanie, setZapisywanie] = useState(false);
@@ -161,6 +163,7 @@ export default function HarmonogramTygodniowy() {
           setKategoriaId("");
           setWybraneKompetencje([]);
           setNotatkaTekst("");
+          setPomijajWRealizacji(false);
         }
         return biezacyEdytowanyId;
       });
@@ -291,6 +294,7 @@ export default function HarmonogramTygodniowy() {
     setKategoriaId(blok.kategoria_id ? String(blok.kategoria_id) : "");
     setWybraneKompetencje(blok.kompetencje ?? []);
     setNotatkaTekst(blok.notatka ?? "");
+    setPomijajWRealizacji(blok.pomijaj_w_realizacji);
     setPokazKompetencje(false);
     setBladFormularza("");
     setZaznaczenie(null);
@@ -317,6 +321,7 @@ export default function HarmonogramTygodniowy() {
       kategoria_id: kategoriaId ? Number(kategoriaId) : null,
       kompetencje: wybraneKompetencje,
       notatka: notatkaTekst.trim() === "" ? null : notatkaTekst,
+      pomijaj_w_realizacji: pomijajWRealizacji,
     };
 
     const { error } = edytowanyBlokId
@@ -334,6 +339,7 @@ export default function HarmonogramTygodniowy() {
     setTytul("");
     setWybraneKompetencje([]);
     setNotatkaTekst("");
+    setPomijajWRealizacji(false);
     setPokazKompetencje(false);
     setPokazFormularz(false);
     setZaznaczenie(null);
@@ -424,7 +430,17 @@ export default function HarmonogramTygodniowy() {
               })}
             </div>
           </div>
-
+          <label className="flex items-center gap-2 mt-3 text-sm text-gray-600 cursor-pointer select-none w-fit">
+          <input
+            type="checkbox"
+            checked={pomijajWRealizacji}
+            onChange={(e) => setPomijajWRealizacji(e.target.checked)}
+            className="rounded border-gray-300"
+           />
+            Nie uwzględniaj w Realizacji
+          <span className="text-gray-400 text-xs">
+          </span>
+          </label>
           <div className="mt-3">
             <div className="text-gray-500 text-xs mb-2">Notatka (opcjonalnie)</div>
             <textarea

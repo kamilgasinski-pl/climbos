@@ -4,12 +4,24 @@ import { useState, useEffect } from "react";
 import { supabase } from "../supabaseclient";
 import { Card } from "@/components/ui/card";
 import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
 
-type ZblizajacySieCel = {
+type Filar = "fizyczne" | "techniczne" | "mentalne" | "inne";
+
+type CelZTerminem = {
   tytul: string;
   termin: string;
   kategoria: "dlugoterminowy" | "sredni" | "krotki";
-  filar: "fizyczne" | "techniczne" | "mentalne" | null;
+  filar: Filar;
+};
+
+const FILARY: Filar[] = ["fizyczne", "techniczne", "mentalne", "inne"];
+
+const NAZWY_FILAROW: Record<Filar, string> = {
+  fizyczne: "Fizyczne",
+  techniczne: "Techniczne",
+  mentalne: "Mentalne",
+  inne: "Inne",
 };
 
 const NAZWY_KATEGORII: Record<string, string> = {
@@ -18,26 +30,24 @@ const NAZWY_KATEGORII: Record<string, string> = {
   krotki: "Cel krótkoterminowy",
 };
 
-const NAZWY_FILAROW: Record<string, string> = {
-  fizyczne: "Fizyczne",
-  techniczne: "Techniczne",
-  mentalne: "Mentalne",
-};
+function dzisiajLokalnie(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dz = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${dz}`;
+}
 
 function formatujDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("pl-PL", {
+  const [r, m, d] = iso.split("-").map(Number);
+  return new Date(r, m - 1, d).toLocaleDateString("pl-PL", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
 }
 
-function dzisiajISO(): string {
-  return new Date().toISOString().split("T")[0];
-}
-
 export default function ZblizajacyCel() {
-  const [cel, setCel] = useState<ZblizajacySieCel | null>(null);
+  const [cele, setCele] = useState<Partial<Record<Filar, CelZTerminem>>>({});
   const [ladowanie, setLadowanie] = useState(true);
 
   useEffect(() => {
@@ -50,40 +60,64 @@ export default function ZblizajacyCel() {
       .select("tytul, termin, kategoria, filar")
       .eq("wykonany", false)
       .not("termin", "is", null)
-      .order("termin", { ascending: true })
-      .limit(1)
-      .maybeSingle();
+      .not("filar", "is", null)
+      .order("termin", { ascending: true });
 
     if (error) {
-      console.error("Błąd pobierania zbliżającego się celu:", error);
+      console.error("Błąd pobierania zbliżających się celów:", error);
       setLadowanie(false);
       return;
     }
 
-    setCel(data as ZblizajacySieCel | null);
+    // Lista jest posortowana rosnąco po terminie, więc pierwszy cel
+    // napotkany dla danej kategorii jest jej najbliższym.
+    const najblizsze: Partial<Record<Filar, CelZTerminem>> = {};
+    for (const cel of data as CelZTerminem[]) {
+      if (FILARY.includes(cel.filar) && !najblizsze[cel.filar]) {
+        najblizsze[cel.filar] = cel;
+      }
+    }
+
+    setCele(najblizsze);
     setLadowanie(false);
   }
 
-  if (ladowanie || !cel) return null;
+  if (ladowanie) return null;
 
-  const poTerminie = cel.termin < dzisiajISO();
+  const dzisiaj = dzisiajLokalnie();
 
   return (
     <Card className="mt-6 p-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <div className="text-gray-500 text-sm">
-            Zbliżający się cel
-            {cel.filar && ` · ${NAZWY_FILAROW[cel.filar]}`}
-          </div>
-          <div className="text-lg font-bold mt-0.5">{cel.tytul}</div>
-          <div className={`text-xs mt-0.5 ${poTerminie ? "text-red-600" : "text-gray-400"}`}>
-            {NAZWY_KATEGORII[cel.kategoria]} · do {formatujDate(cel.termin)}
-          </div>
-        </div>
-        <Link href="/planner?tab=cele" className="text-blue-600 hover:underline text-sm">
-          Zobacz wszystkie cele →
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-gray-500 text-sm">Zbliżające się cele</div>
+        <Link href="/planner?tab=cele" className={buttonVariants({ size: "sm" })}>
+          Zobacz wszystkie cele
         </Link>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {FILARY.map((filar) => {
+          const cel = cele[filar];
+          const poTerminie = cel ? cel.termin < dzisiaj : false;
+
+          return (
+            <div key={filar} className="border border-gray-200 rounded-lg p-3">
+              <div className="text-gray-400 text-xs uppercase tracking-wide">
+                {NAZWY_FILAROW[filar]}
+              </div>
+              {cel ? (
+                <>
+                  <div className="font-bold mt-1">{cel.tytul}</div>
+                  <div className={`text-xs mt-1 ${poTerminie ? "text-red-600" : "text-gray-400"}`}>
+                    {NAZWY_KATEGORII[cel.kategoria]} · do {formatujDate(cel.termin)}
+                  </div>
+                </>
+              ) : (
+                <div className="text-gray-400 text-sm mt-1">Brak celu z terminem</div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </Card>
   );

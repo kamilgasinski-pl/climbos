@@ -5,6 +5,14 @@ import { supabase } from "../supabaseclient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Check, X } from "lucide-react";
+import {
+  zapewnijTydzien,
+  poniedzialekISO,
+  dodajDniISO,
+  dataZISO,
+  numerTygodniaISO,
+  zakresTygodnia,
+} from "../engine/planTygodniaEngine";
 
 const DNI_TYGODNIA = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"];
 const KROK_HISTORII = 4;
@@ -13,8 +21,10 @@ const LICZBA_TYGODNI_DO_PRZODU = 3;
 type Blok = {
   id: number;
   dzien_tygodnia: number;
+  godzina_start: string;
   tytul: string;
-  created_at: string;
+  tydzien_start: string;
+  linia_id: string;
   kategorie_treningowe: { nazwa: string; kolor: string } | null;
 };
 
@@ -24,82 +34,61 @@ type Wykonanie = {
   tydzien_start: string;
 };
 
-function poniedzialekTygodnia(data: Date): Date {
-  const kopia = new Date(data);
-  const dzienTygodnia = kopia.getDay();
-  const przesuniecie = dzienTygodnia === 0 ? -6 : 1 - dzienTygodnia;
-  kopia.setDate(kopia.getDate() + przesuniecie);
-  kopia.setHours(0, 0, 0, 0);
-  return kopia;
-}
+type Wiersz = {
+  klucz: string;
+  dzien: number;
+  linia: string;
+  tytul: string;
+  godzinaStart: string;
+  kolor: string;
+};
 
-function toISODate(data: Date): string {
-  return data.toISOString().split("T")[0];
-}
-
-function formatujKrotko(data: Date): string {
-  const dzien = String(data.getDate()).padStart(2, "0");
-  const miesiac = String(data.getMonth() + 1).padStart(2, "0");
-  return `${dzien}.${miesiac}`;
-}
-
-function formatujZakresTygodnia(poniedzialek: Date): string {
-  const niedziela = new Date(poniedzialek);
-  niedziela.setDate(niedziela.getDate() + 6);
-  return `${formatujKrotko(poniedzialek)}-${formatujKrotko(niedziela)}`;
-}
-
-function blokIstnialWTygodniu(blok: Blok, tydzienStart: Date): boolean {
-  const tydzienUtworzenia = poniedzialekTygodnia(new Date(blok.created_at));
-  return tydzienUtworzenia.getTime() <= tydzienStart.getTime();
-}
-function terminUplynal(blok: Blok, tydzienStart: Date): boolean {
-  const dataZaplanowana = new Date(tydzienStart);
-  dataZaplanowana.setDate(dataZaplanowana.getDate() + blok.dzien_tygodnia);
-
-  const terminOstateczny = new Date(dataZaplanowana);
-  terminOstateczny.setDate(terminOstateczny.getDate() + 7);
-
-  return new Date() > terminOstateczny;
-}
-
-/**
- * Numer tygodnia wg ISO 8601 — tydzień z czwartkiem wyznacza, do którego
- * roku należy (rok ma 52 lub 53 tygodnie, tydzień 1 to ten zawierający
- * pierwszy czwartek roku).
- */
-function numerTygodniaISO(data: Date): number {
-  const d = new Date(Date.UTC(data.getFullYear(), data.getMonth(), data.getDate()));
-  const dzienTygodnia = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dzienTygodnia);
-  const poczatekRoku = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - poczatekRoku.getTime()) / 86400000 + 1) / 7);
+function terminUplynal(blok: Blok): boolean {
+  const termin = dataZISO(blok.tydzien_start);
+  termin.setDate(termin.getDate() + blok.dzien_tygodnia + 7);
+  return new Date() > termin;
 }
 
 export default function SledzenieRealizacji() {
   const [bloki, setBloki] = useState<Blok[]>([]);
   const [wykonania, setWykonania] = useState<Wykonanie[]>([]);
+  const [zapisaneTygodnie, setZapisaneTygodnie] = useState<Set<string>>(new Set());
   const [ladowanie, setLadowanie] = useState(true);
   const [bladPobierania, setBladPobierania] = useState("");
   const [pokazHistorie, setPokazHistorie] = useState(false);
   const [liczbaTygodniHistorii, setLiczbaTygodniHistorii] = useState(KROK_HISTORII);
 
   useEffect(() => {
-    pobierzDane();
+    zaladuj();
   }, []);
 
-  async function pobierzDane() {
-    const [blokiRes, wykonaniaRes] = await Promise.all([
+  async function zaladuj() {
+    try {
+      await zapewnijTydzien(poniedzialekISO(new Date()));
+    } catch (e) {
+      console.error("Błąd przygotowania bieżącego tygodnia:", e);
+      setBladPobierania("Nie udało się przygotować planu bieżącego tygodnia. Odśwież stronę.");
+      setLadowanie(false);
+      return;
+    }
+
+    const [blokiRes, wykonaniaRes, tygodnieRes] = await Promise.all([
       supabase
-  .from("bloki_tygodniowe")
-  .select("id, dzien_tygodnia, tytul, created_at, kategorie_treningowe(nazwa, kolor)")
-  .eq("pomijaj_w_realizacji", false)
-  .order("dzien_tygodnia", { ascending: true }),
+        .from("bloki_tygodniowe")
+        .select(
+          "id, dzien_tygodnia, godzina_start, tytul, tydzien_start, linia_id, kategorie_treningowe(nazwa, kolor)"
+        )
+        .not("tydzien_start", "is", null)
+        .eq("pomijaj_w_realizacji", false),
       supabase.from("wykonania_blokow").select("id, blok_id, tydzien_start"),
+      supabase.from("tygodnie_planu").select("tydzien_start"),
     ]);
 
-    if (blokiRes.error || wykonaniaRes.error) {
-      console.error("Błąd pobierania:", blokiRes.error ?? wykonaniaRes.error);
+    if (blokiRes.error || wykonaniaRes.error || tygodnieRes.error) {
+      console.error(
+        "Błąd pobierania:",
+        blokiRes.error ?? wykonaniaRes.error ?? tygodnieRes.error
+      );
       setBladPobierania("Nie udało się pobrać danych. Sprawdź połączenie i odśwież stronę.");
       setLadowanie(false);
       return;
@@ -107,13 +96,14 @@ export default function SledzenieRealizacji() {
 
     setBloki(blokiRes.data as unknown as Blok[]);
     setWykonania(wykonaniaRes.data as Wykonanie[]);
+    setZapisaneTygodnie(
+      new Set((tygodnieRes.data ?? []).map((t) => t.tydzien_start as string))
+    );
     setLadowanie(false);
   }
 
-  async function przelaczWykonanie(blokId: number, tydzienStart: string) {
-    const istniejace = wykonania.find(
-      (w) => w.blok_id === blokId && w.tydzien_start === tydzienStart
-    );
+  async function przelaczWykonanie(blok: Blok) {
+    const istniejace = wykonania.find((w) => w.blok_id === blok.id);
 
     if (istniejace) {
       const { error } = await supabase.from("wykonania_blokow").delete().eq("id", istniejace.id);
@@ -126,7 +116,7 @@ export default function SledzenieRealizacji() {
     } else {
       const { data, error } = await supabase
         .from("wykonania_blokow")
-        .insert({ blok_id: blokId, tydzien_start: tydzienStart })
+        .insert({ blok_id: blok.id, tydzien_start: blok.tydzien_start })
         .select()
         .single();
 
@@ -142,7 +132,49 @@ export default function SledzenieRealizacji() {
   if (ladowanie) return <p className="text-gray-500">Ładowanie...</p>;
   if (bladPobierania) return <p className="text-red-600">{bladPobierania}</p>;
 
-  if (bloki.length === 0) {
+  const biezacy = poniedzialekISO(new Date());
+
+  // Historia (jeśli rozwinięta) → bieżący tydzień → przyszłe tygodnie,
+  // ale tylko te, które mają już własny plan.
+  const tygodnie: string[] = [];
+
+  if (pokazHistorie) {
+    for (let i = liczbaTygodniHistorii; i >= 1; i--) {
+      tygodnie.push(dodajDniISO(biezacy, -7 * i));
+    }
+  }
+
+  tygodnie.push(biezacy);
+
+  for (let i = 1; i <= LICZBA_TYGODNI_DO_PRZODU; i++) {
+    const t = dodajDniISO(biezacy, 7 * i);
+    if (zapisaneTygodnie.has(t)) tygodnie.push(t);
+  }
+
+  const pokazane = new Set(tygodnie);
+  const blokiPokazane = bloki
+    .filter((b) => pokazane.has(b.tydzien_start))
+    .sort((a, b) => a.tydzien_start.localeCompare(b.tydzien_start));
+
+  const mapaBlokow = new Map<string, Blok>();
+  const mapaWierszy = new Map<string, Wiersz>();
+
+  for (const b of blokiPokazane) {
+    mapaBlokow.set(`${b.tydzien_start}|${b.linia_id}|${b.dzien_tygodnia}`, b);
+    // Późniejszy tydzień nadpisuje nazwę, więc wiersz pokazuje najnowszą.
+    mapaWierszy.set(`${b.dzien_tygodnia}|${b.linia_id}`, {
+      klucz: `${b.dzien_tygodnia}|${b.linia_id}`,
+      dzien: b.dzien_tygodnia,
+      linia: b.linia_id,
+      tytul: b.tytul,
+      godzinaStart: b.godzina_start,
+      kolor: b.kategorie_treningowe?.kolor ?? "#9ca3af",
+    });
+  }
+
+  const wszystkieWiersze = Array.from(mapaWierszy.values());
+
+  if (wszystkieWiersze.length === 0) {
     return (
       <p className="text-gray-500 py-5">
         Dodaj bloki w Harmonogramie tygodniowym, żeby zacząć śledzić ich realizację.
@@ -150,36 +182,10 @@ export default function SledzenieRealizacji() {
     );
   }
 
-  const dzisiejszyPoniedzialek = poniedzialekTygodnia(new Date());
-
-  // Bieżący tydzień zawsze pierwszy; historia (poprzednie tygodnie,
-  // od najnowszego do najstarszego) dołączana tylko gdy rozwinięta.
- const tygodnie: Date[] = [];
-
-  if (pokazHistorie) {
-    for (let i = liczbaTygodniHistorii; i >= 1; i--) {
-      const dzien = new Date(dzisiejszyPoniedzialek);
-      dzien.setDate(dzien.getDate() - i * 7);
-      tygodnie.push(dzien);
-    }
-  }
-
-  tygodnie.push(dzisiejszyPoniedzialek);
-
-  for (let i = 1; i <= LICZBA_TYGODNI_DO_PRZODU; i++) {
-    const dzien = new Date(dzisiejszyPoniedzialek);
-    dzien.setDate(dzien.getDate() + i * 7);
-    tygodnie.push(dzien);
-  }
-
   return (
     <Card className="p-4 overflow-x-auto">
       <div className="flex justify-end mb-3">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setPokazHistorie(!pokazHistorie)}
-        >
+        <Button variant="outline" size="sm" onClick={() => setPokazHistorie(!pokazHistorie)}>
           {pokazHistorie ? "Ukryj historię" : "Pokaż historię"}
         </Button>
       </div>
@@ -190,30 +196,30 @@ export default function SledzenieRealizacji() {
             <th className="text-left p-2 border-b border-gray-200 sticky left-0 bg-white">Dzień</th>
             <th className="text-left p-2 border-b border-gray-200">Aktywność</th>
             {tygodnie.map((t) => (
-              <th key={toISODate(t)} className="p-2 border-b border-gray-200 text-center min-w-[90px]">
+              <th key={t} className="p-2 border-b border-gray-200 text-center min-w-[90px]">
                 <div>
-                  T{numerTygodniaISO(t)}
-                  {t.getTime() === dzisiejszyPoniedzialek.getTime() && (
-                    <span className="text-blue-600"> · dziś</span>
-                  )}
+                  T{numerTygodniaISO(dataZISO(t))}
+                  {t === biezacy && <span className="text-blue-600"> · dziś</span>}
                 </div>
-                <div className="text-xs font-normal text-gray-400">{formatujZakresTygodnia(t)}</div>
+                <div className="text-xs font-normal text-gray-400">{zakresTygodnia(t)}</div>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {DNI_TYGODNIA.map((nazwaDnia, dzienIndex) => {
-            const blokiDnia = bloki.filter((b) => b.dzien_tygodnia === dzienIndex);
-            if (blokiDnia.length === 0) return null;
+            const wierszeDnia = wszystkieWiersze
+              .filter((w) => w.dzien === dzienIndex)
+              .sort((a, b) => a.godzinaStart.localeCompare(b.godzinaStart));
+            if (wierszeDnia.length === 0) return null;
 
             const tloParzyste = dzienIndex % 2 === 0 ? "bg-white" : "bg-gray-50";
 
-            return blokiDnia.map((blok, i) => (
-              <tr key={blok.id} className={tloParzyste}>
+            return wierszeDnia.map((wiersz, i) => (
+              <tr key={wiersz.klucz} className={tloParzyste}>
                 {i === 0 && (
                   <td
-                    rowSpan={blokiDnia.length}
+                    rowSpan={wierszeDnia.length}
                     className={`p-2 border-t-2 border-gray-300 align-top font-bold text-gray-700 sticky left-0 ${tloParzyste}`}
                   >
                     {nazwaDnia}
@@ -222,26 +228,23 @@ export default function SledzenieRealizacji() {
                 <td className={`p-2 ${i === 0 ? "border-t-2 border-gray-300" : "border-t border-gray-100"}`}>
                   <span
                     className="inline-block w-2 h-2 rounded-full mr-2"
-                    style={{ backgroundColor: blok.kategorie_treningowe?.kolor ?? "#9ca3af" }}
+                    style={{ backgroundColor: wiersz.kolor }}
                   />
-                  {blok.tytul}
+                  {wiersz.tytul}
                 </td>
-                                {tygodnie.map((t) => {
-                  const tydzienStart = toISODate(t);
-                  const istnial = blokIstnialWTygodniu(blok, t);
-                  const wykonano = wykonania.some(
-                    (w) => w.blok_id === blok.id && w.tydzien_start === tydzienStart
-                  );
-                  const przegapiony = istnial && !wykonano && terminUplynal(blok, t);
+                {tygodnie.map((t) => {
+                  const blok = mapaBlokow.get(`${t}|${wiersz.linia}|${wiersz.dzien}`);
+                  const wykonano = blok ? wykonania.some((w) => w.blok_id === blok.id) : false;
+                  const przegapiony = blok ? !wykonano && terminUplynal(blok) : false;
 
                   return (
                     <td
-                      key={tydzienStart}
+                      key={t}
                       className={`p-2 text-center ${i === 0 ? "border-t-2 border-gray-300" : "border-t border-gray-100"}`}
                     >
-                      {istnial ? (
+                      {blok ? (
                         <button
-                          onClick={() => przelaczWykonanie(blok.id, tydzienStart)}
+                          onClick={() => przelaczWykonanie(blok)}
                           title={przegapiony ? "Termin minął — nie oznaczono jako wykonane" : undefined}
                           className={`w-6 h-6 rounded-md border flex items-center justify-center mx-auto transition-colors ${
                             wykonano
@@ -256,7 +259,7 @@ export default function SledzenieRealizacji() {
                       ) : (
                         <div
                           className="w-6 h-6 flex items-center justify-center mx-auto text-gray-300"
-                          title="Blok jeszcze nie istniał w tym tygodniu"
+                          title="Tego bloku nie było w planie tego tygodnia"
                         >
                           —
                         </div>

@@ -55,6 +55,9 @@ type CelSesjiKompetencje = {
 
 type Zakladka = "trendy" | "luki" | "historia" | "test";
 type WidokKompetencji = "ogolny" | "szczegolowy";
+type WidokProgresji = "zDolem" | "wedka";
+
+const STYLE_Z_DOLEM = ["Flash", "OS", "RP"];
 
 export default function DNA() {
   const [sesje, setSesje] = useState<Sesja[]>([]);
@@ -65,7 +68,7 @@ export default function DNA() {
   const [bladPobierania, setBladPobierania] = useState("");
   const [aktywnaZakladka, setAktywnaZakladka] = useState<Zakladka>("trendy");
   const [widokKompetencji, setWidokKompetencji] = useState<WidokKompetencji>("ogolny");
-  
+  const [widokProgresji, setWidokProgresji] = useState<WidokProgresji>("zDolem");
 
   useEffect(() => {
     pobierzDane();
@@ -96,15 +99,21 @@ export default function DNA() {
   }
 
   const wszystkiePrzejscia = sesje.flatMap((s) => s.przejscia);
-  const przejsciaUkonczone = wszystkiePrzejscia.filter((p) => liczySieDoProgresji(p));
+  const przejsciaUkonczone = wszystkiePrzejscia.filter(
+    (p) => liczySieDoProgresji(p) && p.styl !== "Projekt"
+  );
 
   const progresjaSzczegolowa = policzProgresje(przejsciaUkonczone);
   const progresja = policzProgresjeProsta(przejsciaUkonczone);
-  const sesjeUkonczone = sesje.map((s) => ({
+  const sesjeDlaWykresu = sesje.map((s) => ({
     ...s,
-    przejscia: s.przejscia.filter((p) => liczySieDoProgresji(p)),
+    przejscia: s.przejscia.filter(
+      (p) =>
+        liczySieDoProgresji(p) &&
+        (widokProgresji === "wedka" ? p.styl === "Wędka" : STYLE_Z_DOLEM.includes(p.styl))
+    ),
   }));
-  const progresjaWCzasie = policzProgresjeWCzasie(sesjeUkonczone);
+  const progresjaWCzasie = policzProgresjeWCzasie(sesjeDlaWykresu);
   const rekomendacje = generujRekomendacje(progresjaSzczegolowa);
 
   const kompetencjeZDrog = policzKompetencje(wszystkiePrzejscia);
@@ -169,7 +178,25 @@ export default function DNA() {
         <p className="text-red-600 mt-8">{bladPobierania}</p>
       ) : aktywnaZakladka === "trendy" ? (
         <>
-          <h2 className="text-xl font-bold mt-8">Progresja w czasie</h2>
+          <div className="flex items-center justify-between mt-8">
+            <h2 className="text-xl font-bold">Progresja w czasie</h2>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant={widokProgresji === "zDolem" ? "default" : "outline"}
+                onClick={() => setWidokProgresji("zDolem")}
+              >
+                Z dołem
+              </Button>
+              <Button
+                size="sm"
+                variant={widokProgresji === "wedka" ? "default" : "outline"}
+                onClick={() => setWidokProgresji("wedka")}
+              >
+                Wędka
+              </Button>
+            </div>
+          </div>
           <Card className="p-4">
             <WykresProgresji dane={progresjaWCzasie} />
           </Card>

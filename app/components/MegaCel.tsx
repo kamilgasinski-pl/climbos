@@ -6,7 +6,7 @@ import { SKALA_KURTYKI, najtrudniejszaOcena } from "../engine/gradeEngine";
 import { policzPasekPostepu } from "../engine/progressionEngine";
 import { Card } from "@/components/ui/card";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -216,12 +216,13 @@ export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, trudnoscTe
           <span className="text-gray-400">→</span>
           <span className="text-blue-600">{cel.trudnosc_docelowa}</span>
         </div>
-        <div className="text-gray-500 text-sm">
-          Zrób{" "}
-          <Link href="/dna" className="text-blue-600 hover:underline">
-            test poziomu
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-gray-500 text-sm">
+            Zrób test poziomu, żeby zobaczyć pasek postępu do celu.
+          </div>
+          <Link href="/dna" className={buttonVariants({ size: "sm" })}>
+            Zrób test poziomu
           </Link>
-          , żeby zobaczyć pasek postępu do celu.
         </div>
       </Card>
     );

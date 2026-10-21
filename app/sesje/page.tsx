@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseclient";
 import Link from "next/link";
-import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import WyborTypuSesji, { TypSesji } from "../components/WyborTypuSesji";
 
 type Przejscie = {
@@ -110,39 +110,47 @@ export default function Sesje() {
 
   return (
     <main className="p-10 font-sans">
-      <h1 className="text-3xl font-bold">Sesje treningowe</h1>
+            <h1 className="text-3xl font-bold">Sesje treningowe</h1>
+      <p className="text-gray-500">Zarządzaj swoimi sesjami treningowymi</p>
 
-      <div className="flex gap-2 mt-5 flex-wrap">
-        <input
-          type="date"
-          value={dataTreningu}
-          onChange={(e) => setDataTreningu(e.target.value)}
+            <Card className="flex flex-col gap-3 mt-5 p-4">
+        <div className="flex gap-2 flex-wrap items-center">
+          <Input
+            type="date"
+            value={dataTreningu}
+            onChange={(e) => setDataTreningu(e.target.value)}
+          />
+          <Input
+            value={miejsce}
+            onChange={(e) => setMiejsce(e.target.value)}
+            placeholder="Miejsce (np. Ścianka XYZ)"
+          />
+          <div className="relative">
+            <Input
+              type="number"
+              value={czasTrwania}
+              onChange={(e) => setCzasTrwania(Number(e.target.value))}
+              className="w-[100px] pr-9"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">
+              min
+            </span>
+          </div>
+        </div>
+
+        <textarea
+          value={notatka}
+          onChange={(e) => setNotatka(e.target.value)}
+          placeholder="Notatka (opcjonalnie)"
+          rows={2}
+          className="p-2 border border-gray-300 rounded-md w-full resize-none text-sm"
         />
-        <input
-          value={miejsce}
-          onChange={(e) => setMiejsce(e.target.value)}
-          placeholder="Miejsce (np. Ścianka XYZ)"
-          className="p-2 border border-gray-300 rounded-md"
-        />
-        <input
-          type="number"
-          value={czasTrwania}
-          onChange={(e) => setCzasTrwania(Number(e.target.value))}
-          placeholder="Czas (min)"
-          className="p-2 border border-gray-300 rounded-md w-[100px]"
-        />
-        <Button onClick={dodajSesje}>Dodaj sesję</Button>
-      </div>
-      <textarea
-        value={notatka}
-        onChange={(e) => setNotatka(e.target.value)}
-        placeholder="Notatka (opcjonalnie)"
-        rows={2}
-        className="mt-2 p-2 border border-gray-300 rounded-md w-full max-w-md resize-none"
-      />
-      {bladFormularza && (
-        <p className="text-red-600 text-sm mt-2">{bladFormularza}</p>
-      )}
+
+        <div>
+          <Button onClick={dodajSesje}>Dodaj sesję</Button>
+        </div>
+      </Card>
+      {bladFormularza && <p className="text-red-600 text-sm mt-2">{bladFormularza}</p>}
 
       {ladowanie ? (
         <div className="flex items-center gap-2 text-gray-500 mt-8">
@@ -162,16 +170,13 @@ export default function Sesje() {
                   <div className="flex flex-row items-center justify-between">
                     <div>
                       <strong>{s.data_treningu}</strong> — {s.miejsce}{" "}
-                      {s.typ_sesji === "bouldering" && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 align-middle">
-                          Bouldering
-                        </span>
-                      )}
-                      {s.typ_sesji !== "bouldering" && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 align-middle">
-                          Wspinaczka
-                        </span>
-                      )}{" "}
+                                          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 align-middle">
+                        {s.typ_sesji === "bouldering"
+                          ? "Bouldering"
+                          : s.typ_sesji === "mix"
+                          ? "50:50"
+                          : "Wspinaczka"}
+                      </span>{" "}
                        <span className="text-gray-500">
                         ({s.czas_trwania_min} min
                         {s.kalorie_spalone != null && ` · 🔥 ${s.kalorie_spalone} kcal`}
@@ -192,9 +197,15 @@ export default function Sesje() {
                       >
                         Szczegóły
                       </Link>
-                      <Button variant="destructive" onClick={() => usunSesje(s.id)}>
-                        Usuń
-                      </Button>
+                                           <button
+                        type="button"
+                        title="Usuń sesję"
+                        aria-label="Usuń sesję"
+                        onClick={() => usunSesje(s.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
                   </div>
 

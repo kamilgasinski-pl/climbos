@@ -567,6 +567,7 @@ export default function SzczegolySesji() {
   }
 
   const czySportowa = sesja.typ_sesji !== "bouldering";
+    const czyRpe = sesja.typ_sesji === "bouldering" || sesja.typ_sesji === "mix";
 
   return (
     <main className="p-10 font-sans">
@@ -618,7 +619,7 @@ export default function SzczegolySesji() {
       )}
 
       <div className="mt-3">
-        <WyborTypuSesji wartosc={sesja.typ_sesji ?? "sportowa"} zmienTypAction={zmienTypSesji} />
+        <WyborTypuSesji wartosc={sesja.typ_sesji ?? "sportowa"} zmienTypAction={zmienTypSesji} mieszana />
       </div>
 
       {bladPobierania && <p className="text-red-600 mt-2">{bladPobierania}</p>}
@@ -771,7 +772,7 @@ export default function SzczegolySesji() {
         )}
       </Card>
 
-                  {!czySportowa && (
+                  {czyRpe && (
         <Card className="p-4 mt-4">
           <div className="text-gray-500 text-sm mb-2">
             Intensywność sesji (RPE) — jak ciężki był dla Ciebie cały trening?

@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { supabase } from "../supabaseclient";
 import { Card } from "@/components/ui/card";
 import Link from "next/link";
-import { Check } from "lucide-react";
+import { Check, Dumbbell } from "lucide-react";
 import { Kompetencja } from "../engine/climbingKnowledgeEngine";
+import { zapewnijTydzien, poniedzialekISO } from "../engine/planTygodniaEngine";
+import { buttonVariants } from "@/components/ui/button";
 
 const DNI_TYGODNIA = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"];
 
@@ -16,6 +18,7 @@ type BlokDzisiaj = {
   tytul: string;
   kompetencje: Kompetencja[] | null;
   kategorie_treningowe: { nazwa: string; kolor: string } | null;
+  zestawy_cwiczen: { id: number; nazwa: string } | null;
 };
 
 type Wykonanie = {
@@ -39,15 +42,6 @@ function dzisiejszyIndeks(): number {
   return (jsDzien + 6) % 7;
 }
 
-function poniedzialekTygodnia(data: Date): Date {
-  const kopia = new Date(data);
-  const dzienTygodnia = kopia.getDay();
-  const przesuniecie = dzienTygodnia === 0 ? -6 : 1 - dzienTygodnia;
-  kopia.setDate(kopia.getDate() + przesuniecie);
-  kopia.setHours(0, 0, 0, 0);
-  return kopia;
-}
-
 function toISODate(data: Date): string {
   return data.toISOString().split("T")[0];
 }
@@ -63,7 +57,7 @@ export default function DzisiejszeAktywnosci({ onZmianaAction }: Props) {
   const [ladowanie, setLadowanie] = useState(true);
   const [blad, setBlad] = useState("");
 
-  const tydzienStart = toISODate(poniedzialekTygodnia(new Date()));
+  const tydzienStart = poniedzialekISO(new Date());
   const dzisiaj = toISODate(new Date());
 
   useEffect(() => {
@@ -72,13 +66,25 @@ export default function DzisiejszeAktywnosci({ onZmianaAction }: Props) {
   }, []);
 
   async function pobierz() {
+    try {
+      await zapewnijTydzien(tydzienStart);
+    } catch (e) {
+      console.error("Błąd przygotowania bieżącego tygodnia:", e);
+      setBlad("Nie udało się przygotować planu bieżącego tygodnia.");
+      setLadowanie(false);
+      return;
+    }
+
     const [blokiRes, wykonaniaRes, dzienneRes] = await Promise.all([
       supabase
-  .from("bloki_tygodniowe")
-  .select("id, godzina_start, godzina_koniec, tytul, kompetencje, kategorie_treningowe(nazwa, kolor)")
-  .eq("dzien_tygodnia", dzisiejszyIndeks())
-  .eq("pomijaj_w_realizacji", false)
-  .order("godzina_start", { ascending: true }),
+        .from("bloki_tygodniowe")
+        .select(
+          "id, godzina_start, godzina_koniec, tytul, kompetencje, kategorie_treningowe(nazwa, kolor), zestawy_cwiczen(id, nazwa)"
+        )
+        .eq("tydzien_start", tydzienStart)
+        .eq("dzien_tygodnia", dzisiejszyIndeks())
+        .eq("pomijaj_w_realizacji", false)
+        .order("godzina_start", { ascending: true }),
       supabase.from("wykonania_blokow").select("id, blok_id, tydzien_start").eq("tydzien_start", tydzienStart),
       supabase.from("cele_dzienne").select("id, tytul, wykonany").eq("data", dzisiaj),
     ]);
@@ -124,7 +130,7 @@ export default function DzisiejszeAktywnosci({ onZmianaAction }: Props) {
       setWykonania((poprzednie) => [...poprzednie, data as Wykonanie]);
     }
 
-      onZmianaAction?.();
+    onZmianaAction?.();
   }
 
   async function przelaczCelDzienny(cel: CelDzienny) {
@@ -149,11 +155,11 @@ export default function DzisiejszeAktywnosci({ onZmianaAction }: Props) {
 
   return (
     <Card className="p-4 mt-6">
-      <div className="flex items-baseline justify-between mb-3">
+        <div className="flex items-center justify-between mb-3">
         <h2 className="font-bold text-lg">Dzisiejsze aktywności</h2>
         <div className="flex items-center gap-3">
-          <Link href="/planner?tab=realizacja" className="text-blue-600 hover:underline text-sm">
-            Zobacz w Planerze →
+          <Link href="/planner?tab=realizacja" className={buttonVariants({ size: "sm" })}>
+            Zobacz w Planerze
           </Link>
           <span className="text-gray-400 text-sm">{dzisiejszaNazwa}</span>
         </div>
@@ -166,8 +172,11 @@ export default function DzisiejszeAktywnosci({ onZmianaAction }: Props) {
       ) : brakCzegokolwiek ? (
         <div className="text-gray-500 text-sm">
           Nic nie zaplanowano na dziś.{" "}
-          <Link href="/planner?tab=harmonogram" className="text-blue-600 hover:underline">
-            Dodaj aktywność →
+                    <Link
+            href="/planner?tab=harmonogram"
+            className={`${buttonVariants({ size: "sm" })} ml-2`}
+          >
+            + Dodaj aktywność
           </Link>
         </div>
       ) : (
@@ -198,11 +207,21 @@ export default function DzisiejszeAktywnosci({ onZmianaAction }: Props) {
                 <span className={`text-sm font-medium ${wykonano ? "line-through text-gray-400" : ""}`}>
                   {b.tytul}
                 </span>
-                {b.kategorie_treningowe?.nazwa && (
-                  <span className="text-xs text-gray-400 ml-auto">
-                    {b.kategorie_treningowe.nazwa}
-                  </span>
-                )}
+                <div className="ml-auto flex items-center gap-3">
+                  {b.zestawy_cwiczen && (
+                                        <Link
+                      href="/planner?tab=zestawy"
+                      className={buttonVariants({ size: "sm" })}
+                      title={`Otwórz zestaw: ${b.zestawy_cwiczen.nazwa}`}
+                    >
+                      <Dumbbell size={12} />
+                      {b.zestawy_cwiczen.nazwa}
+                    </Link>
+                  )}
+                  {b.kategorie_treningowe?.nazwa && (
+                    <span className="text-xs text-gray-400">{b.kategorie_treningowe.nazwa}</span>
+                  )}
+                </div>
               </li>
             );
           })}

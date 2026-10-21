@@ -144,7 +144,7 @@ export default function Home() {
 
   return (
     <main className="p-10 font-sans">
-      <h1 className="text-3xl font-bold text-blue-600">Witaj w ClimbOS 🏔️</h1>
+      <h1 className="text-3xl font-bold">Witaj w ClimbOS</h1>
       <p className="text-gray-500">Twój cyfrowy trener wspinaczkowy</p>
 
       {/* Mega Cel zawsze na górze - stałe przypomnienie co mamy osiągnąć */}
@@ -204,8 +204,8 @@ export default function Home() {
               <div className="text-gray-400 text-sm mt-1">Jeszcze nie wykonano testu</div>
             )}
           </div>
-          <Link href="/dna" className="text-blue-600 hover:underline text-sm">
-            {najnowszyTest ? "Zrób test ponownie →" : "Zrób test poziomu →"}
+          <Link href="/dna" className={buttonVariants({ size: "sm" })}>
+            {najnowszyTest ? "Zrób test ponownie" : "Zrób test poziomu"}
           </Link>
         </div>
       </Card>
@@ -219,9 +219,11 @@ export default function Home() {
           <div className="text-lg font-bold">
             {ostatniaSesja.miejsce} — {ostatniaSesja.data_treningu}
           </div>
-          <Link href={`/sesje/${ostatniaSesja.id}`} className="text-blue-600 hover:underline">
-            Zobacz szczegóły →
-          </Link>
+                    <div className="mt-2">
+            <Link href={`/sesje/${ostatniaSesja.id}`} className={buttonVariants({ size: "sm" })}>
+              Zobacz szczegóły
+            </Link>
+          </div>
         </div>
       )}
 

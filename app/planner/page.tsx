@@ -11,6 +11,8 @@ import SledzenieRealizacji from "../components/SledzenieRealizacji";
 import PiramidaCelow from "../components/PiramidaCelow";
 import { useSearchParams } from "next/navigation";
 import Projekty from "../components/Projekty";
+import ZestawyCwiczen from "../components/ZestawyCwiczen";
+import PostepZestawow from "../components/PostepZestawow";
 
 type Sesja = {
   id: number;
@@ -26,7 +28,7 @@ type Grupa = {
 };
 
 type ZakresWidoku = "dzien" | "tydzien" | "miesiac";
-type Zakladka = "sesje" | "harmonogram" | "realizacja" | "cele" | "projekty";
+type Zakladka = "sesje" | "harmonogram" | "realizacja" | "cele" | "projekty" | "zestawy";
 
 function poczatekTygodnia(data: Date): Date {
   const kopia = new Date(data);
@@ -104,11 +106,12 @@ function pogrupujWgWidoku(sesje: Sesja[], widok: ZakresWidoku): Grupa[] {
 }
 
 function poprawnaZakladka(wartosc: string | null): Zakladka {
-   if (
+  if (
     wartosc === "harmonogram" ||
     wartosc === "realizacja" ||
     wartosc === "cele" ||
-    wartosc === "projekty"
+    wartosc === "projekty" ||
+    wartosc === "zestawy"
   ) {
     return wartosc;
   }
@@ -212,11 +215,17 @@ export default function Planner() {
         >
           Cele
         </Button>
-         <Button
+        <Button
           variant={aktywnaZakladka === "projekty" ? "default" : "outline"}
           onClick={() => setAktywnaZakladka("projekty")}
         >
           Projekty
+        </Button>
+        <Button
+          variant={aktywnaZakladka === "zestawy" ? "default" : "outline"}
+          onClick={() => setAktywnaZakladka("zestawy")}
+        >
+          Zestawy
         </Button>
       </div>
 
@@ -224,11 +233,12 @@ export default function Planner() {
         <div className="mt-5">
           <HarmonogramTygodniowy />
         </div>
-      ) : aktywnaZakladka === "realizacja" ? (
-        <div className="mt-5">
+            ) : aktywnaZakladka === "realizacja" ? (
+        <div className="mt-5 flex flex-col gap-5">
           <SledzenieRealizacji />
+          <PostepZestawow />
         </div>
-             ) : aktywnaZakladka === "cele" ? (
+      ) : aktywnaZakladka === "cele" ? (
         <div className="mt-5">
           <PiramidaCelow />
         </div>
@@ -236,6 +246,8 @@ export default function Planner() {
         <div className="mt-5">
           <Projekty />
         </div>
+      ) : aktywnaZakladka === "zestawy" ? (
+        <ZestawyCwiczen />
       ) : (
         <>
           <Card className="flex flex-col gap-3 mt-5 p-4">

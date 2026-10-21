@@ -1,6 +1,6 @@
 "use client";
 import AuthProvider from "./authprovider";
-import { Mountain, Home, BookOpen, Calendar, Dna, CalendarDays, User } from "lucide-react";
+import { Mountain, Home, BookOpen, Calendar, Dna, CalendarDays, User, LifeBuoy } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import "./globals.css";
@@ -17,6 +17,7 @@ const linki = [
   { href: "/sesje", label: "Sesje", ikona: Calendar },
   { href: "/dna", label: "DNA", ikona: Dna },
   { href: "/profil", label: "Profil", ikona: User },
+  { href: "/pomoc", label: "Pomoc", ikona: LifeBuoy },
 ];
 
 export default function RootLayout({

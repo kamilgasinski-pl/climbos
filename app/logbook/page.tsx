@@ -104,7 +104,9 @@ export default function Logbook() {
   const progresjaWCzasie = policzProgresjeWCzasiePoStylu(sesjeUkonczone);
 
   const sesjeSportowe = sesje.filter((s) => s.typ_sesji !== "bouldering");
-  const sesjeBoulderingu = sesje.filter((s) => s.typ_sesji === "bouldering");
+    const sesjeBoulderingu = sesje.filter(
+    (s) => s.typ_sesji === "bouldering" || s.typ_sesji === "mix"
+  );
   const aktywnoscSportowa = policzAktywnoscWCzasie(sesjeSportowe).map((p) => ({
     data: p.data,
     wartosc: p.liczbaPrzejsc,
@@ -113,7 +115,8 @@ export default function Logbook() {
 
   return (
     <main className="p-10 font-sans">
-      <h1 className="text-3xl font-bold">Logbook</h1>
+            <h1 className="text-3xl font-bold">Logbook</h1>
+      <p className="text-gray-500">Twoja progresja w czasie</p>
 
       {ladowanie ? (
         <div className="flex items-center gap-2 text-gray-500 mt-8">
@@ -185,7 +188,7 @@ export default function Logbook() {
                                             <div>
                         <strong>{s.data_treningu}</strong> — {s.miejsce}{" "}
                         <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 align-middle">
-                          {s.typ_sesji === "bouldering" ? "Bouldering" : "Wspinaczka"}
+                          {s.typ_sesji === "bouldering" ? "Bouldering" : s.typ_sesji === "mix" ? "50:50" : "Wspinaczka"}
                         </span>{" "}
                         <span className="text-gray-500">
                           ({s.czas_trwania_min} min

@@ -5,13 +5,28 @@ import { supabase } from "../supabaseclient";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import KategorieManager, { Kategoria } from "./KategorieManager";
 import { NAZWY_KOMPETENCJI, FILARY, NAZWY_FILAROW, Kompetencja, Filar } from "../engine/climbingKnowledgeEngine";
-import { X, Pencil, StickyNote } from "lucide-react";
+import { X, Pencil, StickyNote, Dumbbell, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  zapewnijTydzien,
+  oznaczTydzien,
+  poniedzialekISO,
+  dodajDniISO,
+  etykietaTygodnia,
+  pobierzSzablon,
+  zapiszSzablon,
+  zastosujSzablon,
+  RekordBloku,
+} from "../engine/planTygodniaEngine";
 
 const DNI_TYGODNIA = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"];
+const DNI_SKROT = ["Pon", "Wt", "Śr", "Czw", "Pt", "Sob", "Nd"];
 const GODZINA_START_SIATKI = 5;
 const GODZINA_KONIEC_SIATKI = 23;
+const LICZBA_TYGODNI_WSTECZ = 12;
+const LICZBA_TYGODNI_DO_PRZODU = 8;
 
 type Blok = {
   id: number;
@@ -23,7 +38,14 @@ type Blok = {
   kompetencje: Kompetencja[] | null;
   notatka: string | null;
   pomijaj_w_realizacji: boolean;
+  zestaw_id: number | null;
+  tydzien_start: string;
   kategorie_treningowe: { nazwa: string; kolor: string } | null;
+};
+
+type ZestawSkrot = {
+  id: number;
+  nazwa: string;
 };
 
 type Zaznaczenie = {
@@ -48,6 +70,17 @@ type PodgladBloku = {
   koniec: number;
 };
 
+type BlokDoPorownania = {
+  dzien_tygodnia: number;
+  godzina_start: string;
+  godzina_koniec: string;
+  tytul: string;
+  kategoria_id: number | null;
+  zestaw_id: number | null;
+};
+
+type Komunikat = { typ: "ok" | "blad"; tekst: string };
+
 function godzinaNaLiczbe(godzina: string): number {
   const [h, m] = godzina.split(":").map(Number);
   return h + m / 60;
@@ -57,11 +90,39 @@ function indeksNaGodzine(indeks: number): string {
   return `${String(GODZINA_START_SIATKI + indeks).padStart(2, "0")}:00`;
 }
 
+function opisTygodnia(tydzien: string, biezacy: string): string {
+  const znacznik = tydzien === biezacy ? " · dziś" : tydzien < biezacy ? " · minął" : "";
+  return `${etykietaTygodnia(tydzien)}${znacznik}`;
+}
+
+/** Tekstowy "odcisk" dnia, żeby sprawdzić czy dzień różni się od szablonu. */
+function podpisDnia(bloki: BlokDoPorownania[], dzien: number): string {
+  return bloki
+    .filter((b) => b.dzien_tygodnia === dzien)
+    .map(
+      (b) =>
+        `${b.godzina_start.slice(0, 5)}-${b.godzina_koniec.slice(0, 5)}|${b.tytul}|${
+          b.kategoria_id ?? ""
+        }|${b.zestaw_id ?? ""}`
+    )
+    .sort()
+    .join(";");
+}
+
 export default function HarmonogramTygodniowy() {
   const [kategorie, setKategorie] = useState<Kategoria[]>([]);
+  const [zestawy, setZestawy] = useState<ZestawSkrot[]>([]);
   const [bloki, setBloki] = useState<Blok[]>([]);
   const [ladowanie, setLadowanie] = useState(true);
   const [bladPobierania, setBladPobierania] = useState("");
+
+  const [tydzien, setTydzien] = useState(() => poniedzialekISO(new Date()));
+
+  const [szablon, setSzablon] = useState<RekordBloku[]>([]);
+  const [panelSzablonu, setPanelSzablonu] = useState(false);
+  const [dniDoZapisu, setDniDoZapisu] = useState<number[]>([]);
+  const [pracaSzablonu, setPracaSzablonu] = useState(false);
+  const [komunikat, setKomunikat] = useState<Komunikat | null>(null);
 
   const [pokazFormularz, setPokazFormularz] = useState(false);
   const [dzien, setDzien] = useState("0");
@@ -69,6 +130,7 @@ export default function HarmonogramTygodniowy() {
   const [godzinaKoniec, setGodzinaKoniec] = useState("07:00");
   const [tytul, setTytul] = useState("");
   const [kategoriaId, setKategoriaId] = useState("");
+  const [zestawId, setZestawId] = useState("");
   const [wybraneKompetencje, setWybraneKompetencje] = useState<Kompetencja[]>([]);
   const [pokazKompetencje, setPokazKompetencje] = useState(false);
   const [notatkaTekst, setNotatkaTekst] = useState("");
@@ -85,9 +147,53 @@ export default function HarmonogramTygodniowy() {
 
   const formularzRef = useRef<HTMLDivElement>(null);
 
+  const biezacyTydzien = poniedzialekISO(new Date());
+  const opcjeTygodni: string[] = [];
+  for (let i = -LICZBA_TYGODNI_WSTECZ; i <= LICZBA_TYGODNI_DO_PRZODU; i++) {
+    opcjeTygodni.push(dodajDniISO(biezacyTydzien, i * 7));
+  }
+  const indeksTygodnia = opcjeTygodni.indexOf(tydzien);
+
+  const maSzablon = szablon.length > 0;
+  const dniRoznych = DNI_TYGODNIA.map((_, i) => podpisDnia(bloki, i) !== podpisDnia(szablon, i));
+  const wszystkieDni = DNI_TYGODNIA.map((_, i) => i);
+
   useEffect(() => {
-    pobierzBloki();
+    pobierzZestawy();
+    odswiezSzablon();
   }, []);
+
+  useEffect(() => {
+    let aktualne = true;
+
+    setPokazFormularz(false);
+    setEdytowanyBlokId(null);
+    setZaznaczenie(null);
+    setPanelSzablonu(false);
+    setKomunikat(null);
+
+    async function zaladuj() {
+      setLadowanie(true);
+      setBladPobierania("");
+      try {
+        await zapewnijTydzien(tydzien);
+      } catch (e) {
+        console.error("Błąd przygotowania tygodnia:", e);
+        if (aktualne) {
+          setBladPobierania("Nie udało się przygotować planu tego tygodnia. Odśwież stronę.");
+          setLadowanie(false);
+        }
+        return;
+      }
+      if (aktualne) await pobierzBloki(tydzien);
+    }
+
+    zaladuj();
+    return () => {
+      aktualne = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tydzien]);
 
   useEffect(() => {
     function zakoncz() {
@@ -104,7 +210,7 @@ export default function HarmonogramTygodniowy() {
     window.addEventListener("mouseup", zakoncz);
     return () => window.removeEventListener("mouseup", zakoncz);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zaznaczenie, przeciaganieBloku, podgladBloku]);
+  }, [zaznaczenie, przeciaganieBloku, podgladBloku, tydzien]);
 
   useEffect(() => {
     if (pokazFormularz && formularzRef.current) {
@@ -112,10 +218,11 @@ export default function HarmonogramTygodniowy() {
     }
   }, [pokazFormularz]);
 
-  async function pobierzBloki() {
+  async function pobierzBloki(tydzienDocelowy: string) {
     const { data, error } = await supabase
       .from("bloki_tygodniowe")
       .select("*, kategorie_treningowe(nazwa, kolor)")
+      .eq("tydzien_start", tydzienDocelowy)
       .order("godzina_start", { ascending: true });
 
     if (error) {
@@ -126,6 +233,87 @@ export default function HarmonogramTygodniowy() {
     }
     setBloki(data as unknown as Blok[]);
     setLadowanie(false);
+  }
+
+  async function pobierzZestawy() {
+    const { data, error } = await supabase
+      .from("zestawy_cwiczen")
+      .select("id, nazwa")
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      console.error("Błąd pobierania zestawów:", error);
+      return;
+    }
+    setZestawy(data as ZestawSkrot[]);
+  }
+
+  async function odswiezSzablon() {
+    try {
+      setSzablon(await pobierzSzablon());
+    } catch (e) {
+      console.error("Błąd pobierania szablonu:", e);
+    }
+  }
+
+  function przelaczPanelSzablonu() {
+    if (panelSzablonu) {
+      setPanelSzablonu(false);
+      return;
+    }
+    // Z istniejącym szablonem zaznaczamy dni, które się od niego różnią;
+    // przy pierwszym zapisie zaznaczamy wszystkie.
+    setDniDoZapisu(maSzablon ? wszystkieDni.filter((i) => dniRoznych[i]) : wszystkieDni);
+    setKomunikat(null);
+    setPokazFormularz(false);
+    setPanelSzablonu(true);
+  }
+
+  function przelaczDzienSzablonu(dzienIndex: number) {
+    setDniDoZapisu((poprzednie) =>
+      poprzednie.includes(dzienIndex)
+        ? poprzednie.filter((d) => d !== dzienIndex)
+        : [...poprzednie, dzienIndex]
+    );
+  }
+
+  async function zapiszSzablonKlik() {
+    setPracaSzablonu(true);
+    setKomunikat(null);
+    const blad = await zapiszSzablon(tydzien, dniDoZapisu);
+    setPracaSzablonu(false);
+
+    if (blad) {
+      setKomunikat({ typ: "blad", tekst: blad });
+      return;
+    }
+
+    await odswiezSzablon();
+    setPanelSzablonu(false);
+    setKomunikat({
+      typ: "ok",
+      tekst: "Szablon zapisany. Nowe tygodnie będą powstawać z szablonu.",
+    });
+  }
+
+  async function zastosujSzablonKlik() {
+    const potwierdzenie = window.confirm(
+      "Zastąpić plan tego tygodnia szablonem? Zmiany wprowadzone w tym tygodniu zostaną utracone."
+    );
+    if (!potwierdzenie) return;
+
+    setPracaSzablonu(true);
+    setKomunikat(null);
+    const blad = await zastosujSzablon(tydzien);
+    setPracaSzablonu(false);
+
+    if (blad) {
+      setKomunikat({ typ: "blad", tekst: blad });
+      return;
+    }
+
+    await pobierzBloki(tydzien);
+    setKomunikat({ typ: "ok", tekst: "Plan tego tygodnia zastąpiony szablonem." });
   }
 
   function rozpocznijZaznaczanie(dzienIndex: number, godzinaIndex: number) {
@@ -155,12 +343,13 @@ export default function HarmonogramTygodniowy() {
 
       // Jeśli NIE edytujemy istniejącego bloku, to jest nowy blok -
       // czyścimy resztę formularza. Jeśli edytujemy, zachowujemy
-      // tytuł/kategorię/kompetencje/notatkę - przeciągnięcie zmienia
-      // tylko dzień/godziny tego bloku.
+      // tytuł/kategorię/zestaw/kompetencje/notatkę - przeciągnięcie
+      // zmienia tylko dzień/godziny tego bloku.
       setEdytowanyBlokId((biezacyEdytowanyId) => {
         if (biezacyEdytowanyId === null) {
           setTytul("");
           setKategoriaId("");
+          setZestawId("");
           setWybraneKompetencje([]);
           setNotatkaTekst("");
           setPomijajWRealizacji(false);
@@ -170,6 +359,7 @@ export default function HarmonogramTygodniowy() {
 
       setPokazKompetencje(false);
       setBladFormularza("");
+      setPanelSzablonu(false);
       setPokazFormularz(true);
 
       return aktualne;
@@ -268,7 +458,7 @@ export default function HarmonogramTygodniowy() {
       return;
     }
 
-    pobierzBloki();
+    pobierzBloki(tydzien);
   }
 
   function przelaczKompetencje(klucz: Kompetencja) {
@@ -277,6 +467,23 @@ export default function HarmonogramTygodniowy() {
         ? poprzednie.filter((k) => k !== klucz)
         : [...poprzednie, klucz]
     );
+  }
+
+  function przelaczZestaw(zestaw: ZestawSkrot) {
+    const juzWybrany = zestawId === String(zestaw.id);
+    setZestawId(juzWybrany ? "" : String(zestaw.id));
+    // Puste pole nazwy wypełniamy nazwą zestawu, ale nigdy nie nadpisujemy
+    // nazwy wpisanej wcześniej przez użytkownika.
+    if (!juzWybrany && tytul.trim() === "") {
+      setTytul(zestaw.nazwa);
+    }
+  }
+
+  function przesunTydzien(kierunek: -1 | 1) {
+    const nowyIndeks = indeksTygodnia + kierunek;
+    if (nowyIndeks >= 0 && nowyIndeks < opcjeTygodni.length) {
+      setTydzien(opcjeTygodni[nowyIndeks]);
+    }
   }
 
   function anulujFormularz() {
@@ -292,12 +499,14 @@ export default function HarmonogramTygodniowy() {
     setGodzinaKoniec(blok.godzina_koniec.slice(0, 5));
     setTytul(blok.tytul);
     setKategoriaId(blok.kategoria_id ? String(blok.kategoria_id) : "");
+    setZestawId(blok.zestaw_id ? String(blok.zestaw_id) : "");
     setWybraneKompetencje(blok.kompetencje ?? []);
     setNotatkaTekst(blok.notatka ?? "");
     setPomijajWRealizacji(blok.pomijaj_w_realizacji);
     setPokazKompetencje(false);
     setBladFormularza("");
     setZaznaczenie(null);
+    setPanelSzablonu(false);
     setPokazFormularz(true);
   }
 
@@ -313,12 +522,23 @@ export default function HarmonogramTygodniowy() {
     setBladFormularza("");
     setZapisywanie(true);
 
+    try {
+      // Tydzień z ręcznie dodanym blokiem ma własny plan, nawet jeśli to pierwszy blok.
+      if (!edytowanyBlokId) await oznaczTydzien(tydzien);
+    } catch (e) {
+      console.error("Błąd oznaczania tygodnia:", e);
+      setZapisywanie(false);
+      setBladFormularza("Nie udało się zapisać bloku. Spróbuj ponownie.");
+      return;
+    }
+
     const rekord = {
       dzien_tygodnia: Number(dzien),
       godzina_start: godzinaStart,
       godzina_koniec: godzinaKoniec,
       tytul,
       kategoria_id: kategoriaId ? Number(kategoriaId) : null,
+      zestaw_id: zestawId ? Number(zestawId) : null,
       kompetencje: wybraneKompetencje,
       notatka: notatkaTekst.trim() === "" ? null : notatkaTekst,
       pomijaj_w_realizacji: pomijajWRealizacji,
@@ -326,7 +546,7 @@ export default function HarmonogramTygodniowy() {
 
     const { error } = edytowanyBlokId
       ? await supabase.from("bloki_tygodniowe").update(rekord).eq("id", edytowanyBlokId)
-      : await supabase.from("bloki_tygodniowe").insert(rekord);
+      : await supabase.from("bloki_tygodniowe").insert({ ...rekord, tydzien_start: tydzien });
 
     setZapisywanie(false);
 
@@ -337,6 +557,7 @@ export default function HarmonogramTygodniowy() {
     }
 
     setTytul("");
+    setZestawId("");
     setWybraneKompetencje([]);
     setNotatkaTekst("");
     setPomijajWRealizacji(false);
@@ -344,7 +565,7 @@ export default function HarmonogramTygodniowy() {
     setPokazFormularz(false);
     setZaznaczenie(null);
     setEdytowanyBlokId(null);
-    pobierzBloki();
+    pobierzBloki(tydzien);
   }
 
   async function usunBlok(id: number) {
@@ -354,7 +575,7 @@ export default function HarmonogramTygodniowy() {
       setBladPobierania("Nie udało się usunąć bloku. Spróbuj ponownie.");
       return;
     }
-    pobierzBloki();
+    pobierzBloki(tydzien);
   }
 
   const liczbaGodzin = GODZINA_KONIEC_SIATKI - GODZINA_START_SIATKI + 1;
@@ -365,6 +586,158 @@ export default function HarmonogramTygodniowy() {
         <div className="font-bold mb-3">Kategorie</div>
         <KategorieManager onZmiana={setKategorie} />
       </Card>
+
+      <Card className="p-3 mb-4 flex flex-row items-center gap-2 flex-wrap">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => przesunTydzien(-1)}
+          disabled={indeksTygodnia <= 0}
+        >
+          <ChevronLeft size={16} />
+        </Button>
+
+        <Select value={tydzien} onValueChange={(v) => v && setTydzien(v)}>
+          <SelectTrigger className="w-[280px]">
+            <span>{opisTygodnia(tydzien, biezacyTydzien)}</span>
+          </SelectTrigger>
+          <SelectContent>
+            {opcjeTygodni.map((t) => (
+              <SelectItem key={t} value={t}>
+                {opisTygodnia(t, biezacyTydzien)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => przesunTydzien(1)}
+          disabled={indeksTygodnia < 0 || indeksTygodnia >= opcjeTygodni.length - 1}
+        >
+          <ChevronRight size={16} />
+        </Button>
+
+        {tydzien !== biezacyTydzien && (
+          <Button variant="outline" size="sm" onClick={() => setTydzien(biezacyTydzien)}>
+            Bieżący tydzień
+          </Button>
+        )}
+
+        <div className="ml-auto flex items-center gap-2">
+          {maSzablon && tydzien >= biezacyTydzien && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={zastosujSzablonKlik}
+              disabled={pracaSzablonu || ladowanie}
+            >
+              Zastosuj szablon
+            </Button>
+          )}
+          <Button size="sm" onClick={przelaczPanelSzablonu} disabled={ladowanie}>
+            Zapisz szablon
+          </Button>
+        </div>
+
+        <span className="w-full text-gray-400 text-xs">
+          {maSzablon
+            ? "Zmiany dotyczą tylko wybranego tygodnia. Nowy tydzień powstaje z zapisanego szablonu."
+            : "Zmiany dotyczą tylko wybranego tygodnia. Nowy tydzień powstaje jako kopia poprzedniego — zapisz szablon, żeby to zmienić."}
+        </span>
+      </Card>
+
+      {panelSzablonu && (
+        <Card className="p-4 mb-4">
+          <div className="font-bold">Zapisz szablon z tygodnia {etykietaTygodnia(tydzien)}</div>
+          <p className="text-gray-500 text-sm mt-1">
+            {maSzablon
+              ? "Zaznacz dni, które mają nadpisać swoją wersję w szablonie. Pozostałe dni szablonu zostają bez zmian. Kropka oznacza dzień różniący się od szablonu."
+              : "Zaznacz dni, które mają trafić do szablonu."}
+          </p>
+
+          <div className="flex flex-wrap gap-2 mt-3">
+            {wszystkieDni.map((i) => {
+              const wybrany = dniDoZapisu.includes(i);
+              const liczba = bloki.filter((b) => b.dzien_tygodnia === i).length;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => przelaczDzienSzablonu(i)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                    wybrany
+                      ? "bg-gray-900 border-gray-900 text-white"
+                      : "border-gray-300 text-gray-600 hover:border-gray-400"
+                  }`}
+                >
+                  {DNI_SKROT[i]} · {liczba}
+                  {maSzablon && dniRoznych[i] && (
+                    <span
+                      className="w-1.5 h-1.5 rounded-full bg-orange-500"
+                      title="Różni się od szablonu"
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-3 mt-2 text-sm">
+            <button
+              type="button"
+              onClick={() => setDniDoZapisu(wszystkieDni)}
+              className="text-gray-500 hover:text-gray-800 underline"
+            >
+              Wszystkie
+            </button>
+            <button
+              type="button"
+              onClick={() => setDniDoZapisu([])}
+              className="text-gray-500 hover:text-gray-800 underline"
+            >
+              Żaden
+            </button>
+          </div>
+
+          {maSzablon && dniRoznych.every((r) => !r) && (
+            <p className="text-gray-400 text-xs mt-2">Ten tydzień jest zgodny z szablonem.</p>
+          )}
+          {dniDoZapisu.some((i) => bloki.filter((b) => b.dzien_tygodnia === i).length === 0) && (
+            <p className="text-orange-600 text-xs mt-2">
+              Zaznaczony dzień bez bloków wyczyści ten dzień w szablonie.
+            </p>
+          )}
+          {!maSzablon && bloki.length === 0 && (
+            <p className="text-orange-600 text-xs mt-2">
+              Ten tydzień nie ma jeszcze żadnych bloków, więc nie ma czego zapisać.
+            </p>
+          )}
+
+          <div className="flex gap-2 mt-3">
+            <Button
+              onClick={zapiszSzablonKlik}
+              disabled={
+                pracaSzablonu || dniDoZapisu.length === 0 || (!maSzablon && bloki.length === 0)
+              }
+            >
+              {pracaSzablonu ? "Zapisywanie..." : "Zapisz szablon"}
+            </Button>
+            <Button variant="outline" onClick={() => setPanelSzablonu(false)}>
+              Anuluj
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {komunikat && (
+        <p
+          className={`text-sm mb-3 ${komunikat.typ === "ok" ? "text-green-700" : "text-red-600"}`}
+        >
+          {komunikat.tekst}
+        </p>
+      )}
 
       <p className="text-gray-500 text-sm mb-3">
         Kliknij i przeciągnij po siatce poniżej, żeby zaznaczyć dzień i zakres godzin nowego bloku.
@@ -430,17 +803,47 @@ export default function HarmonogramTygodniowy() {
               })}
             </div>
           </div>
+
+          <div className="mt-3">
+            <div className="text-gray-500 text-xs mb-2">Zestaw ćwiczeń (opcjonalnie)</div>
+            {zestawy.length === 0 ? (
+              <p className="text-gray-400 text-xs">
+                Brak zestawów — utwórz pierwszy w zakładce „Zestawy".
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {zestawy.map((z) => {
+                  const wybrany = zestawId === String(z.id);
+                  return (
+                    <button
+                      key={z.id}
+                      type="button"
+                      onClick={() => przelaczZestaw(z)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                        wybrany
+                          ? "bg-gray-900 border-gray-900 text-white"
+                          : "border-gray-300 text-gray-600 hover:border-gray-400"
+                      }`}
+                    >
+                      <Dumbbell size={13} />
+                      {z.nazwa}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <label className="flex items-center gap-2 mt-3 text-sm text-gray-600 cursor-pointer select-none w-fit">
-          <input
-            type="checkbox"
-            checked={pomijajWRealizacji}
-            onChange={(e) => setPomijajWRealizacji(e.target.checked)}
-            className="rounded border-gray-300"
-           />
+            <input
+              type="checkbox"
+              checked={pomijajWRealizacji}
+              onChange={(e) => setPomijajWRealizacji(e.target.checked)}
+              className="rounded border-gray-300"
+            />
             Nie uwzględniaj w Realizacji
-          <span className="text-gray-400 text-xs">
-          </span>
           </label>
+
           <div className="mt-3">
             <div className="text-gray-500 text-xs mb-2">Notatka (opcjonalnie)</div>
             <textarea
@@ -510,6 +913,11 @@ export default function HarmonogramTygodniowy() {
         <p className="text-red-600">{bladPobierania}</p>
       ) : (
         <Card className="p-4 overflow-x-auto">
+          {bloki.length === 0 && (
+            <p className="text-gray-400 text-sm mb-3">
+              Ten tydzień nie ma jeszcze bloków — przeciągnij po siatce, żeby dodać pierwszy.
+            </p>
+          )}
           <div
             className="grid text-sm select-none"
             style={{
@@ -573,6 +981,9 @@ export default function HarmonogramTygodniowy() {
                 const rowStart = Math.floor(start - GODZINA_START_SIATKI) + 2;
                 const rowEnd = Math.ceil(koniec - GODZINA_START_SIATKI) + 2;
                 const kolor = blok.kategorie_treningowe?.kolor ?? "#9ca3af";
+                const zestawBloku = blok.zestaw_id
+                  ? zestawy.find((z) => z.id === blok.zestaw_id)
+                  : undefined;
 
                 return (
                   <div
@@ -605,6 +1016,11 @@ export default function HarmonogramTygodniowy() {
                       <span className="text-xs font-medium truncate" style={{ color: kolor }}>
                         {blok.tytul}
                       </span>
+                      {zestawBloku && (
+                        <span title={`Zestaw: ${zestawBloku.nazwa}`} className="shrink-0 flex">
+                          <Dumbbell size={10} className="opacity-70" style={{ color: kolor }} />
+                        </span>
+                      )}
                       {blok.notatka && (
                         <StickyNote size={10} className="shrink-0 opacity-60" style={{ color: kolor }} />
                       )}

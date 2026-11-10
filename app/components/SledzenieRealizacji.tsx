@@ -44,10 +44,30 @@ type Wiersz = {
   kolor: string;
 };
 
+// Ile dni minęło od zaplanowanego dnia bloku (0 = dziś, ujemne = jeszcze przed nami).
+function dniPoTerminie(blok: Blok): number {
+  const dzienBloku = dataZISO(blok.tydzien_start);
+  dzienBloku.setDate(dzienBloku.getDate() + blok.dzien_tygodnia);
+  dzienBloku.setHours(0, 0, 0, 0);
+  const dzis = new Date();
+  dzis.setHours(0, 0, 0, 0);
+  return Math.round((dzis.getTime() - dzienBloku.getTime()) / 86400000);
+}
+
 function terminUplynal(blok: Blok, dniNaWykonanie: number): boolean {
-  const termin = dataZISO(blok.tydzien_start);
-  termin.setDate(termin.getDate() + blok.dzien_tygodnia + dniNaWykonanie);
-  return new Date() > termin;
+  return dniPoTerminie(blok) >= dniNaWykonanie;
+}
+
+// Ile dni zostało na dokończenie zaległego bloku (null = blok nie jest jeszcze zaległy albo okno minęło).
+function pozostaleDni(blok: Blok, dniNaWykonanie: number): number | null {
+  const po = dniPoTerminie(blok);
+  if (po < 1) return null;
+  const zostalo = dniNaWykonanie - po;
+  return zostalo > 0 ? zostalo : null;
+}
+
+function dniSlownie(n: number): string {
+  return n === 1 ? "1 dzień" : `${n} dni`;
 }
 
 export default function SledzenieRealizacji() {
@@ -177,6 +197,13 @@ export default function SledzenieRealizacji() {
 
   const wszystkieWiersze = Array.from(mapaWierszy.values());
 
+  const niezrealizowane = blokiPokazane
+    .filter((b) => !wykonania.some((w) => w.blok_id === b.id) && terminUplynal(b, dniNaWykonanie))
+    .sort(
+      (a, b) =>
+        b.tydzien_start.localeCompare(a.tydzien_start) || b.dzien_tygodnia - a.dzien_tygodnia
+    );
+
   if (wszystkieWiersze.length === 0) {
     return (
       <p className="text-gray-500 py-5">
@@ -239,6 +266,7 @@ export default function SledzenieRealizacji() {
                   const blok = mapaBlokow.get(`${t}|${wiersz.linia}|${wiersz.dzien}`);
                   const wykonano = blok ? wykonania.some((w) => w.blok_id === blok.id) : false;
                   const przegapiony = blok ? !wykonano && terminUplynal(blok, dniNaWykonanie) : false;
+                  const zostalo = blok && !wykonano ? pozostaleDni(blok, dniNaWykonanie) : null;
 
                   return (
                     <td
@@ -248,16 +276,30 @@ export default function SledzenieRealizacji() {
                       {blok ? (
                         <button
                           onClick={() => przelaczWykonanie(blok)}
-                          title={przegapiony ? "Termin minął — nie oznaczono jako wykonane" : undefined}
+                          title={
+                            przegapiony
+                              ? "Termin minął — nie oznaczono jako wykonane"
+                              : zostalo != null
+                              ? `Zaległe — zostało ${dniSlownie(zostalo)} na wykonanie`
+                              : undefined
+                          }
                           className={`w-6 h-6 rounded-md border flex items-center justify-center mx-auto transition-colors ${
                             wykonano
                               ? "bg-green-600 border-green-600 text-white"
                               : przegapiony
                               ? "bg-red-50 border-red-300 text-red-500 hover:border-red-400"
+                              : zostalo != null
+                              ? "bg-amber-50 border-amber-300 text-amber-700 hover:border-amber-400"
                               : "border-gray-300 hover:border-gray-400"
                           }`}
                         >
-                          {wykonano ? <Check size={14} /> : przegapiony ? <X size={14} /> : null}
+                          {wykonano ? (
+                            <Check size={14} />
+                          ) : przegapiony ? (
+                            <X size={14} />
+                          ) : zostalo != null ? (
+                            <span className="text-xs font-semibold">{zostalo}</span>
+                          ) : null}
                         </button>
                       ) : (
                         <div
@@ -275,6 +317,36 @@ export default function SledzenieRealizacji() {
           })}
         </tbody>
       </table>
+
+      <p className="mt-3 text-xs text-gray-500">
+        Zaległy blok ma {dniSlownie(dniNaWykonanie)} od zaplanowanego dnia — liczba w żółtym polu to
+        pozostałe dni. Po tym czasie trafia do niezrealizowanych.
+      </p>
+
+      {niezrealizowane.length > 0 && (
+        <div className="mt-4">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">
+            Niezrealizowane ({niezrealizowane.length})
+          </h3>
+          <ul className="space-y-1">
+            {niezrealizowane.map((b) => (
+              <li key={b.id} className="flex items-center gap-2 text-sm text-gray-600">
+                <span className="w-5 h-5 rounded-md bg-red-50 border border-red-300 text-red-500 flex items-center justify-center shrink-0">
+                  <X size={12} />
+                </span>
+                <span>
+                  {b.tytul}
+                  <span className="text-gray-400">
+                    {" "}
+                    · {DNI_TYGODNIA[b.dzien_tygodnia]}, T{numerTygodniaISO(dataZISO(b.tydzien_start))} (
+                    {zakresTygodnia(b.tydzien_start)})
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {pokazHistorie && (
         <div className="mt-4 flex gap-2">

@@ -19,6 +19,10 @@ import {
 
 const LIMIT_WPISOW = 8;
 
+// Pigułka jak w zakładkach plannera.
+const KLASA_PIGULKI =
+  "inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1 text-sm text-gray-800 transition-colors hover:border-gray-300 hover:bg-gray-50";
+
 export function WyborPol({
   wybrane,
   zmianaAction,
@@ -140,6 +144,7 @@ export default function CwiczenieKarta({ cwiczenie, zmianaAction, usunAction }: 
   const [ladowanie, setLadowanie] = useState(true);
 
   const [formularz, setFormularz] = useState(false);
+  const [edytowanyWpisId, setEdytowanyWpisId] = useState<number | null>(null);
   const [data, setData] = useState(dzisiajLokalnie());
   const [wartosci, setWartosci] = useState<Record<string, string>>({});
   const [blad, setBlad] = useState("");
@@ -187,12 +192,33 @@ export default function CwiczenieKarta({ cwiczenie, zmianaAction, usunAction }: 
     }
     setWartosci(start);
     setData(dzisiajLokalnie());
+    setEdytowanyWpisId(null);
     setBlad("");
     setFormularz(true);
   }
 
+  function otworzEdycjeWpisu(wpis: WykonanieCwiczenia) {
+    const start: Record<string, string> = {};
+    for (const pole of POLA_SLEDZENIA) {
+      if (!cwiczenie.sledzone.includes(pole.klucz)) continue;
+      const wartosc = wpis[pole.klucz];
+      start[pole.klucz] = wartosc != null ? String(wartosc) : "";
+    }
+    setWartosci(start);
+    setData(wpis.data);
+    setEdytowanyWpisId(wpis.id);
+    setBlad("");
+    setFormularz(true);
+  }
+
+  function zamknijFormularz() {
+    setFormularz(false);
+    setEdytowanyWpisId(null);
+    setBlad("");
+  }
+
   async function zapiszWykonanie() {
-    const rekord: Record<string, unknown> = { cwiczenie_id: cwiczenie.id, data };
+    const rekord: Record<string, unknown> = { data };
     let cosWpisano = false;
 
     for (const klucz of cwiczenie.sledzone) {
@@ -218,9 +244,19 @@ export default function CwiczenieKarta({ cwiczenie, zmianaAction, usunAction }: 
       return;
     }
 
+    if (data === "") {
+      setBlad("Podaj datę.");
+      return;
+    }
+
     setBlad("");
     setZapisywanie(true);
-    const { error } = await supabase.from("wykonania_cwiczen").insert(rekord);
+
+    const { error } =
+      edytowanyWpisId != null
+        ? await supabase.from("wykonania_cwiczen").update(rekord).eq("id", edytowanyWpisId)
+        : await supabase.from("wykonania_cwiczen").insert({ ...rekord, cwiczenie_id: cwiczenie.id });
+
     setZapisywanie(false);
 
     if (error) {
@@ -229,7 +265,8 @@ export default function CwiczenieKarta({ cwiczenie, zmianaAction, usunAction }: 
       return;
     }
 
-    setFormularz(false);
+    zamknijFormularz();
+    setWybranyWpisId(null);
     pobierz();
   }
 
@@ -356,6 +393,9 @@ export default function CwiczenieKarta({ cwiczenie, zmianaAction, usunAction }: 
 
       {formularz ? (
         <div className="flex flex-col gap-2 bg-gray-50 rounded-md p-2.5">
+          {edytowanyWpisId != null && (
+            <div className="text-xs font-medium text-gray-600">Edycja wpisu</div>
+          )}
           <div className="flex gap-2 flex-wrap items-center">
             <Input
               type="date"
@@ -396,17 +436,21 @@ export default function CwiczenieKarta({ cwiczenie, zmianaAction, usunAction }: 
           {blad && <p className="text-red-600 text-xs">{blad}</p>}
           <div className="flex gap-2">
             <Button size="sm" onClick={zapiszWykonanie} disabled={zapisywanie}>
-              {zapisywanie ? "Zapisywanie..." : "Zapisz wykonanie"}
+              {zapisywanie
+                ? "Zapisywanie..."
+                : edytowanyWpisId != null
+                ? "Zapisz zmiany"
+                : "Zapisz wykonanie"}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setFormularz(false)}>
+            <Button size="sm" variant="outline" onClick={zamknijFormularz}>
               Anuluj
             </Button>
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-3">
-          <button onClick={otworzFormularz} className="text-blue-600 hover:underline text-sm">
-            + Zapisz wykonanie
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={otworzFormularz} className={KLASA_PIGULKI}>
+            <Plus size={13} /> Zapisz wykonanie
           </button>
           {wykonania.length > 0 && (
             <button
@@ -414,7 +458,7 @@ export default function CwiczenieKarta({ cwiczenie, zmianaAction, usunAction }: 
                 setHistoria(!historia);
                 setWybranyWpisId(null);
               }}
-              className="text-gray-500 hover:text-gray-800 text-sm flex items-center gap-1"
+              className={KLASA_PIGULKI}
             >
               Historia wpisów ({wykonania.length})
               {historia ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -426,7 +470,7 @@ export default function CwiczenieKarta({ cwiczenie, zmianaAction, usunAction }: 
       {historia && wykonania.length > 0 && (
         <div className="flex flex-col gap-1.5 pt-2 border-t border-gray-100">
           <p className="text-gray-400 text-xs">
-            Kliknij wpis, żeby go zaznaczyć. Dopiero wtedy pojawi się przycisk usuwania.
+            Kliknij wpis, żeby go zaznaczyć. Dopiero wtedy pojawią się przyciski edycji i usuwania.
           </p>
 
           {widoczneWpisy.map((w) => {
@@ -459,19 +503,33 @@ export default function CwiczenieKarta({ cwiczenie, zmianaAction, usunAction }: 
                 <span className="flex-1 text-gray-700">
                   {formatujWykonanie(w, cwiczenie.sledzone) || "—"}
                 </span>
-                                {wybrany && (
-                  <button
-                    type="button"
-                    title="Usuń wpis"
-                    aria-label="Usuń wpis"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      usunWykonanie(w.id);
-                    }}
-                    className="text-gray-500 hover:text-red-600 transition-colors"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                {wybrany && (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      title="Edytuj wpis"
+                      aria-label="Edytuj wpis"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        otworzEdycjeWpisu(w);
+                      }}
+                      className="text-gray-500 hover:text-blue-600 transition-colors"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      title="Usuń wpis"
+                      aria-label="Usuń wpis"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        usunWykonanie(w.id);
+                      }}
+                      className="text-gray-500 hover:text-red-600 transition-colors"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 )}
               </div>
             );

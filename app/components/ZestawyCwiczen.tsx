@@ -360,10 +360,10 @@ export default function ZestawyCwiczen() {
                 ) : (
                   <button
                     onClick={() => otworzDodawanieCwiczenia(zestaw.id)}
-                    className="text-blue-600 hover:underline text-sm flex items-center gap-1 w-fit"
-                  >
+                    className="inline-flex items-center gap-1 rounded-full border border-gray-900 bg-gray-900 px-3 py-1 text-sm text-white transition-colors hover:bg-gray-700 w-fit"
+                    >
                     <Plus size={13} /> Dodaj ćwiczenie
-                  </button>
+                    </button>
                 )}
               </div>
             </>

@@ -30,6 +30,7 @@ type Sesja = {
   srednie_bpm: number | null;
   typ_sesji: TypSesji;
   rpe: number | null;
+  brak_danych_zegarka: boolean | null;
 };
 
 type Przejscie = {
@@ -127,6 +128,7 @@ export default function SzczegolySesji() {
   const [kalorieTekst, setKalorieTekst] = useState("");
   const [bpmTekst, setBpmTekst] = useState("");
   const [zapisywanieZegarka, setZapisywanieZegarka] = useState(false);
+  const [brakDanychZegarka, setBrakDanychZegarka] = useState(false);
 
   const [edycjaCzasu, setEdycjaCzasu] = useState(false);
   const [czasTekst, setCzasTekst] = useState("");
@@ -168,6 +170,7 @@ export default function SzczegolySesji() {
     setNotatkaTekst((data as Sesja).notatka ?? "");
     setKalorieTekst((data as Sesja).kalorie_spalone?.toString() ?? "");
     setBpmTekst((data as Sesja).srednie_bpm?.toString() ?? "");
+    setBrakDanychZegarka((data as Sesja).brak_danych_zegarka ?? false);
     setCzasTekst(minutyNaHHMM((data as Sesja).czas_trwania_min));
   }
 
@@ -312,12 +315,13 @@ export default function SzczegolySesji() {
   async function zapiszDaneZegarka() {
     setZapisywanieZegarka(true);
 
-    const kalorie = kalorieTekst.trim() === "" ? null : Number(kalorieTekst);
-    const bpm = bpmTekst.trim() === "" ? null : Number(bpmTekst);
+    // Gdy zaznaczono "brak danych z zegarka", kalorie i BPM zostają puste.
+    const kalorie = brakDanychZegarka || kalorieTekst.trim() === "" ? null : Number(kalorieTekst);
+    const bpm = brakDanychZegarka || bpmTekst.trim() === "" ? null : Number(bpmTekst);
 
     const { error } = await supabase
       .from("sesje")
-      .update({ kalorie_spalone: kalorie, srednie_bpm: bpm })
+      .update({ kalorie_spalone: kalorie, srednie_bpm: bpm, brak_danych_zegarka: brakDanychZegarka })
       .eq("id", sesjaId);
 
     setZapisywanieZegarka(false);
@@ -329,8 +333,19 @@ export default function SzczegolySesji() {
     }
 
     setSesja((poprzednia) =>
-      poprzednia ? { ...poprzednia, kalorie_spalone: kalorie, srednie_bpm: bpm } : poprzednia
+      poprzednia
+        ? {
+            ...poprzednia,
+            kalorie_spalone: kalorie,
+            srednie_bpm: bpm,
+            brak_danych_zegarka: brakDanychZegarka,
+          }
+        : poprzednia
     );
+    if (brakDanychZegarka) {
+      setKalorieTekst("");
+      setBpmTekst("");
+    }
     setEdycjaZegarka(false);
   }
 
@@ -710,6 +725,15 @@ export default function SzczegolySesji() {
         {edycjaZegarka ? (
           <div className="flex flex-col gap-2">
             <div className="text-gray-500 text-sm mb-1">Dane z zegarka (opcjonalnie)</div>
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none w-fit">
+              <input
+                type="checkbox"
+                checked={brakDanychZegarka}
+                onChange={(e) => setBrakDanychZegarka(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              Brak danych z zegarka
+            </label>
             <div className="flex gap-2 flex-wrap">
               <Input
                 type="number"
@@ -718,6 +742,7 @@ export default function SzczegolySesji() {
                 placeholder="Spalone kalorie (kcal)"
                 className="w-[200px]"
                 autoComplete="off"
+                disabled={brakDanychZegarka}
               />
               <Input
                 type="number"
@@ -726,6 +751,7 @@ export default function SzczegolySesji() {
                 placeholder="Średnie BPM"
                 className="w-[160px]"
                 autoComplete="off"
+                disabled={brakDanychZegarka}
               />
             </div>
             <div className="flex gap-2 mt-1">
@@ -738,6 +764,7 @@ export default function SzczegolySesji() {
                 onClick={() => {
                   setKalorieTekst(sesja.kalorie_spalone?.toString() ?? "");
                   setBpmTekst(sesja.srednie_bpm?.toString() ?? "");
+                  setBrakDanychZegarka(sesja.brak_danych_zegarka ?? false);
                   setEdycjaZegarka(false);
                 }}
               >
@@ -762,6 +789,8 @@ export default function SzczegolySesji() {
                   </div>
                 )}
               </div>
+            ) : sesja.brak_danych_zegarka ? (
+              <p className="text-gray-500 text-sm">⌚ Brak danych z zegarka</p>
             ) : (
               <p className="text-gray-400 italic text-sm">
                 Brak danych z zegarka — kliknij, aby dodać.

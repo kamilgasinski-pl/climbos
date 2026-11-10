@@ -25,6 +25,7 @@ type Sesja = {
   kalorie_spalone: number | null;
   srednie_bpm: number | null;
   rpe: number | null;
+  brak_danych_zegarka: boolean | null;
   typ_sesji: TypSesji | null;
   przejscia: Przejscie[];
 };
@@ -182,7 +183,11 @@ export default function Sesje() {
                         ({s.czas_trwania_min} min
                         {s.kalorie_spalone != null && ` · 🔥 ${s.kalorie_spalone} kcal`}
                         {s.srednie_bpm != null && ` · ❤️ ${s.srednie_bpm} bpm`}
-                        {s.rpe != null && ` · ⚡ RPE ${s.rpe}`})
+                                                {s.rpe != null && ` · ⚡ RPE ${s.rpe}`}
+                        {s.brak_danych_zegarka &&
+                          s.kalorie_spalone == null &&
+                          s.srednie_bpm == null &&
+                          " · ⌚ brak danych z zegarka"})
                       </span>
                     </div>
                     <div className="flex items-center gap-2">

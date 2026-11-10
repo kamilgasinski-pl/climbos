@@ -14,7 +14,6 @@ import Projekty from "../components/Projekty";
 import ZestawyCwiczen from "../components/ZestawyCwiczen";
 import PostepZestawow from "../components/PostepZestawow";
 import { pobierzUstawienia } from "../engine/ustawieniaEngine";
-import { useTestPoziomuWlaczony } from "./components/useTestPoziomuWlaczony";
 
 
 type Sesja = {

@@ -1,6 +1,6 @@
 "use client";
 import { Input } from "@/components/ui/input";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Select,
@@ -18,6 +18,7 @@ import WyborTypuSesji, { TypSesji } from "../../components/WyborTypuSesji";
 import Link from "next/link";
 import { Loader2, Pencil, X, Check } from "lucide-react";
 import { konwertujOcene, SKALA_KURTYKI, najtrudniejszaOcena, STOPNIE_UKONCZENIA, StopienUkonczenia, czyUkonczonaWCalosci, liczySieDoProgresji } from "../../engine/gradeEngine";
+import { useKompetencjeWlaczone } from "../../components/useKompetencjeWlaczone";
 
 type Sesja = {
   id: number;
@@ -89,10 +90,10 @@ function nowyWiersz(): WierszDrogi {
   };
 }
 
-
 export default function SzczegolySesji() {
   const params = useParams();
   const sesjaId = Number(params.id);
+  const kompetencjeWlaczone = useKompetencjeWlaczone();
 
   const [sesja, setSesja] = useState<Sesja | null>(null);
   const [przejscia, setPrzejscia] = useState<Przejscie[]>([]);
@@ -146,6 +147,7 @@ export default function SzczegolySesji() {
       setLadowanie(false);
     }
     pobierzWszystko();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function pobierzSesje() {
@@ -253,35 +255,35 @@ export default function SzczegolySesji() {
   }
 
   async function zapiszMiejsce() {
-  if (miejsceTekst.trim() === "") {
-    setBladPobierania("Podaj nazwę miejsca.");
-    return;
+    if (miejsceTekst.trim() === "") {
+      setBladPobierania("Podaj nazwę miejsca.");
+      return;
+    }
+    if (dataTekst === "") {
+      setBladPobierania("Podaj datę sesji.");
+      return;
+    }
+    setBladPobierania("");
+    setZapisywanieMiejsca(true);
+
+    const { error } = await supabase
+      .from("sesje")
+      .update({ miejsce: miejsceTekst, data_treningu: dataTekst })
+      .eq("id", sesjaId);
+
+    setZapisywanieMiejsca(false);
+
+    if (error) {
+      console.error("Błąd zapisu miejsca i daty:", error);
+      setBladPobierania("Nie udało się zapisać zmian. Spróbuj ponownie.");
+      return;
+    }
+
+    setSesja((poprzednia) =>
+      poprzednia ? { ...poprzednia, miejsce: miejsceTekst, data_treningu: dataTekst } : poprzednia
+    );
+    setEdycjaMiejsca(false);
   }
-  if (dataTekst === "") {
-    setBladPobierania("Podaj datę sesji.");
-    return;
-  }
-  setBladPobierania("");
-  setZapisywanieMiejsca(true);
-
-  const { error } = await supabase
-    .from("sesje")
-    .update({ miejsce: miejsceTekst, data_treningu: dataTekst })
-    .eq("id", sesjaId);
-
-  setZapisywanieMiejsca(false);
-
-  if (error) {
-    console.error("Błąd zapisu miejsca i daty:", error);
-    setBladPobierania("Nie udało się zapisać zmian. Spróbuj ponownie.");
-    return;
-  }
-
-  setSesja((poprzednia) =>
-    poprzednia ? { ...poprzednia, miejsce: miejsceTekst, data_treningu: dataTekst } : poprzednia
-  );
-  setEdycjaMiejsca(false);
-}
 
   async function zapiszNotatke() {
     setZapisywanieNotatki(true);
@@ -504,7 +506,7 @@ export default function SzczegolySesji() {
     const { error } = await supabase.from("cele_sesji").insert({
       sesja_id: sesjaId,
       tytul: nowyCelTytul,
-      kompetencje: nowyCelKompetencje,
+      kompetencje: kompetencjeWlaczone ? nowyCelKompetencje : [],
     });
 
     setZapisywanieCelu(false);
@@ -567,7 +569,10 @@ export default function SzczegolySesji() {
   }
 
   const czySportowa = sesja.typ_sesji !== "bouldering";
-    const czyRpe = sesja.typ_sesji === "bouldering" || sesja.typ_sesji === "mix";
+  const czyRpe = sesja.typ_sesji === "bouldering" || sesja.typ_sesji === "mix";
+
+  const klasaEtykietyBlok =
+    "flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none whitespace-nowrap";
 
   return (
     <main className="p-10 font-sans">
@@ -576,7 +581,7 @@ export default function SzczegolySesji() {
       </Link>
 
       {edycjaMiejsca ? (
-                <div className="flex items-center gap-2 mt-4 flex-wrap">
+        <div className="flex items-center gap-2 mt-4 flex-wrap">
           <Input
             value={miejsceTekst}
             onChange={(e) => setMiejsceTekst(e.target.value)}
@@ -772,7 +777,7 @@ export default function SzczegolySesji() {
         )}
       </Card>
 
-                  {czyRpe && (
+      {czyRpe && (
         <Card className="p-4 mt-4">
           <div className="text-gray-500 text-sm mb-2">
             Intensywność sesji (RPE) — jak ciężki był dla Ciebie cały trening?
@@ -818,8 +823,9 @@ export default function SzczegolySesji() {
 
       <h2 className="text-xl font-bold mt-8">Cele sesji</h2>
       <p className="text-gray-500 text-sm mt-1">
-        Np. "3x lot" żeby popracować nad kontrolą emocji. Odhaczony cel dolicza punkty do
-        profilu kompetencji na Home.
+        {kompetencjeWlaczone
+          ? 'Np. "3x lot" żeby popracować nad kontrolą emocji. Odhaczony cel dolicza punkty do profilu kompetencji w DNA.'
+          : 'Np. "3x lot" albo "3 drogi w 6c". Odhaczaj cele w trakcie sesji.'}
       </p>
 
       <Card className="p-4 mt-3">
@@ -850,7 +856,7 @@ export default function SzczegolySesji() {
                 >
                   {cel.tytul}
                 </span>
-                {cel.kompetencje.length > 0 && (
+                {kompetencjeWlaczone && cel.kompetencje.length > 0 && (
                   <div className="flex gap-1 flex-wrap ml-1">
                     {cel.kompetencje.map((k) => (
                       <span
@@ -882,47 +888,51 @@ export default function SzczegolySesji() {
           />
         </div>
 
-        <button
-          type="button"
-          onClick={() => setPokazKompetencjeCelu(!pokazKompetencjeCelu)}
-          className="text-sm text-blue-600 hover:underline mt-3"
-        >
-          {pokazKompetencjeCelu
-            ? "− Ukryj kompetencje"
-            : nowyCelKompetencje.length > 0
-            ? `+ Kompetencje (${nowyCelKompetencje.length})`
-            : "+ Dodaj kompetencje (opcjonalnie)"}
-        </button>
+        {kompetencjeWlaczone && (
+          <>
+            <button
+              type="button"
+              onClick={() => setPokazKompetencjeCelu(!pokazKompetencjeCelu)}
+              className="text-sm text-blue-600 hover:underline mt-3"
+            >
+              {pokazKompetencjeCelu
+                ? "− Ukryj kompetencje"
+                : nowyCelKompetencje.length > 0
+                ? `+ Kompetencje (${nowyCelKompetencje.length})`
+                : "+ Dodaj kompetencje (opcjonalnie)"}
+            </button>
 
-        {pokazKompetencjeCelu && (
-          <div className="mt-3">
-            <div className="text-gray-500 text-xs mb-2">
-              Które kompetencje rozwija ten cel? (opcjonalnie)
-            </div>
-            <div className="flex flex-col gap-2">
-              {(Object.keys(FILARY) as Filar[]).map((filar) => (
-                <div key={filar} className="flex items-center gap-2 flex-wrap">
-                  <span className="text-gray-400 text-xs w-[70px] shrink-0">
-                    {NAZWY_FILAROW[filar]}
-                  </span>
-                  {FILARY[filar].map((klucz) => (
-                    <button
-                      key={klucz}
-                      type="button"
-                      onClick={() => przelaczKompetencjeCelu(klucz)}
-                      className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
-                        nowyCelKompetencje.includes(klucz)
-                          ? "bg-gray-900 border-gray-900 text-white"
-                          : "border-gray-300 text-gray-600 hover:border-gray-400"
-                      }`}
-                    >
-                      {NAZWY_KOMPETENCJI[klucz]}
-                    </button>
+            {pokazKompetencjeCelu && (
+              <div className="mt-3">
+                <div className="text-gray-500 text-xs mb-2">
+                  Które kompetencje rozwija ten cel? (opcjonalnie)
+                </div>
+                <div className="flex flex-col gap-2">
+                  {(Object.keys(FILARY) as Filar[]).map((filar) => (
+                    <div key={filar} className="flex items-center gap-2 flex-wrap">
+                      <span className="text-gray-400 text-xs w-[70px] shrink-0">
+                        {NAZWY_FILAROW[filar]}
+                      </span>
+                      {FILARY[filar].map((klucz) => (
+                        <button
+                          key={klucz}
+                          type="button"
+                          onClick={() => przelaczKompetencjeCelu(klucz)}
+                          className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
+                            nowyCelKompetencje.includes(klucz)
+                              ? "bg-gray-900 border-gray-900 text-white"
+                              : "border-gray-300 text-gray-600 hover:border-gray-400"
+                          }`}
+                        >
+                          {NAZWY_KOMPETENCJI[klucz]}
+                        </button>
+                      ))}
+                    </div>
                   ))}
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
+            )}
+          </>
         )}
 
         {bladCelu && <p className="text-red-600 text-sm mt-2">{bladCelu}</p>}
@@ -1039,7 +1049,7 @@ export default function SzczegolySesji() {
                     ))}
                   </SelectContent>
                 </Select>
-                <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none whitespace-nowrap">
+                <label className={klasaEtykietyBlok}>
                   <input
                     type="checkbox"
                     checked={w.blok}
@@ -1092,111 +1102,111 @@ export default function SzczegolySesji() {
             </div>
           </Card>
 
-                <h2 className="text-xl font-bold mt-8">Drogi w tej sesji</h2>
-      <ul className="list-none p-0">
-        {przejscia.map((p) =>
-          edytowanePrzejscieId === p.id ? (
-            <li key={p.id}>
-              <Card className="flex flex-row items-center gap-2 p-2.5 flex-wrap">
-                <Input
-                  value={edytowanaNazwa}
-                  onChange={(e) => setEdytowanaNazwa(e.target.value)}
-                  placeholder="Nazwa drogi"
-                  className="w-[180px]"
-                  autoFocus
-                />
-                <Select
-                  value={edytowanaTrudnosc}
-                  onValueChange={(value) => setEdytowanaTrudnosc(value ?? "")}
-                >
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue placeholder="Trudność" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SKALA_KURTYKI.map((o) => (
-                      <SelectItem key={o} value={o}>
-                        {o}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={edytowanyStyl} onValueChange={(value) => setEdytowanyStyl(value ?? "OS")}>
-                  <SelectTrigger className="w-[160px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="OS">OS (on-sight)</SelectItem>
-                    <SelectItem value="RP">RP (redpoint)</SelectItem>
-                    <SelectItem value="Flash">Flash</SelectItem>
-                    <SelectItem value="Projekt">Projekt/Próba</SelectItem>
-                    <SelectItem value="Wędka">Wędka</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={edytowanyStopienUkonczenia}
-                  onValueChange={(value) =>
-                    setEdytowanyStopienUkonczenia((value as StopienUkonczenia) ?? "cala")
-                  }
-                >
-                  <SelectTrigger className="w-[130px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STOPNIE_UKONCZENIA.map((s) => (
-                      <SelectItem key={s.wartosc} value={s.wartosc}>
-                        {s.etykieta}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none whitespace-nowrap">
-                  <input
-                    type="checkbox"
-                    checked={edytowanyBlok}
-                    onChange={(e) => setEdytowanyBlok(e.target.checked)}
-                    className="rounded border-gray-300"
-                  />
-                  Blok
-                </label>
-                <Button size="sm" onClick={() => zapiszEdycjePrzejscia(p.id)} disabled={zapisywaniePrzejscia}>
-                  {zapisywaniePrzejscia ? "Zapisywanie..." : "Zapisz"}
-                </Button>
-                <Button size="sm" variant="outline" onClick={anulujEdycjePrzejscia}>
-                  Anuluj
-                </Button>
-              </Card>
-            </li>
-          ) : (
-            <li key={p.id}>
-              <Card className="flex flex-row items-center gap-4 p-2.5">
-                <strong>{p.nazwa_drogi}</strong>
-                <span>
-                  {p.trudnosc} ({konwertujOcene(p.trudnosc, "kurtyki", "francuska")})
-                </span>
-                <span>{p.styl}</span>
-                {!czyUkonczonaWCalosci(p.stopien_ukonczenia) && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
-                    {p.stopien_ukonczenia} drogi
-                  </span>
-                )}
-                {p.blok && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                    Blok
-                  </span>
-                )}
-                <div className="flex gap-2 ml-auto">
-                  <Button size="sm" variant="outline" onClick={() => rozpocznijEdycjePrzejscia(p)}>
-                    Edytuj
-                  </Button>
-                  <Button variant="destructive" size="sm" onClick={() => usunPrzejscie(p.id)}>
-                    Usuń
-                  </Button>
-                </div>
-              </Card>
-            </li>
-          )
-        )}
-      </ul>
+          <h2 className="text-xl font-bold mt-8">Drogi w tej sesji</h2>
+          <ul className="list-none p-0">
+            {przejscia.map((p) =>
+              edytowanePrzejscieId === p.id ? (
+                <li key={p.id}>
+                  <Card className="flex flex-row items-center gap-2 p-2.5 flex-wrap">
+                    <Input
+                      value={edytowanaNazwa}
+                      onChange={(e) => setEdytowanaNazwa(e.target.value)}
+                      placeholder="Nazwa drogi"
+                      className="w-[180px]"
+                      autoFocus
+                    />
+                    <Select
+                      value={edytowanaTrudnosc}
+                      onValueChange={(value) => setEdytowanaTrudnosc(value ?? "")}
+                    >
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="Trudność" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SKALA_KURTYKI.map((o) => (
+                          <SelectItem key={o} value={o}>
+                            {o}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={edytowanyStyl} onValueChange={(value) => setEdytowanyStyl(value ?? "OS")}>
+                      <SelectTrigger className="w-[160px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="OS">OS (on-sight)</SelectItem>
+                        <SelectItem value="RP">RP (redpoint)</SelectItem>
+                        <SelectItem value="Flash">Flash</SelectItem>
+                        <SelectItem value="Projekt">Projekt/Próba</SelectItem>
+                        <SelectItem value="Wędka">Wędka</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={edytowanyStopienUkonczenia}
+                      onValueChange={(value) =>
+                        setEdytowanyStopienUkonczenia((value as StopienUkonczenia) ?? "cala")
+                      }
+                    >
+                      <SelectTrigger className="w-[130px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STOPNIE_UKONCZENIA.map((s) => (
+                          <SelectItem key={s.wartosc} value={s.wartosc}>
+                            {s.etykieta}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <label className={klasaEtykietyBlok}>
+                      <input
+                        type="checkbox"
+                        checked={edytowanyBlok}
+                        onChange={(e) => setEdytowanyBlok(e.target.checked)}
+                        className="rounded border-gray-300"
+                      />
+                      Blok
+                    </label>
+                    <Button size="sm" onClick={() => zapiszEdycjePrzejscia(p.id)} disabled={zapisywaniePrzejscia}>
+                      {zapisywaniePrzejscia ? "Zapisywanie..." : "Zapisz"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={anulujEdycjePrzejscia}>
+                      Anuluj
+                    </Button>
+                  </Card>
+                </li>
+              ) : (
+                <li key={p.id}>
+                  <Card className="flex flex-row items-center gap-4 p-2.5">
+                    <strong>{p.nazwa_drogi}</strong>
+                    <span>
+                      {p.trudnosc} ({konwertujOcene(p.trudnosc, "kurtyki", "francuska")})
+                    </span>
+                    <span>{p.styl}</span>
+                    {!czyUkonczonaWCalosci(p.stopien_ukonczenia) && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                        {p.stopien_ukonczenia} drogi
+                      </span>
+                    )}
+                    {p.blok && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                        Blok
+                      </span>
+                    )}
+                    <div className="flex gap-2 ml-auto">
+                      <Button size="sm" variant="outline" onClick={() => rozpocznijEdycjePrzejscia(p)}>
+                        Edytuj
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => usunPrzejscie(p.id)}>
+                        Usuń
+                      </Button>
+                    </div>
+                  </Card>
+                </li>
+              )
+            )}
+          </ul>
         </>
       )}
     </main>

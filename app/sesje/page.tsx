@@ -7,6 +7,7 @@ import { supabase } from "../supabaseclient";
 import Link from "next/link";
 import { Loader2, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import WyborTypuSesji, { TypSesji } from "../components/WyborTypuSesji";
+import { useKompetencjeWlaczone } from "../components/useKompetencjeWlaczone";
 
 type Przejscie = {
   id: number;

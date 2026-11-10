@@ -284,6 +284,21 @@ const SEKCJE: Sekcja[] = [
       },
     ],
   },
+   {
+    id: "ustawienia",
+    tytul: "Ustawienia",
+    wstep: "Preferencje działania aplikacji (menu → Ustawienia).",
+    punkty: [
+      {
+        nazwa: "Planner",
+        opis: "Wybierasz zakładkę, którą Planner otwiera domyślnie, oraz domyślny widok listy zaplanowanych sesji (dzień, tydzień, miesiąc). Linki z innych stron nadal otwierają wskazaną zakładkę.",
+      },
+      {
+        nazwa: "Realizacja",
+        opis: "Liczba dni od dnia bloku, po których niewykonana aktywność dostaje czerwony krzyżyk (domyślnie 7, zakres 1–60).",
+      },
+    ],
+  },
   {
     id: "wskazowki",
     tytul: "Wskazówki",
@@ -304,6 +319,7 @@ const SEKCJE: Sekcja[] = [
         nazwa: "Bezpośrednie linki",
         opis: "Adres /planner?tab=cele otwiera od razu wybraną zakładkę Plannera (harmonogram, realizacja, cele, projekty, zestawy).",
       },
+  
     ],
   },
 ];

@@ -31,9 +31,21 @@ type Props = {
   najtrudniejszaOS: string | null;
   /** Ocena z ostatniego wykonanego testu poziomu (skala Kurtyki), punkt startowy paska */
   trudnoscTestu: string | null;
+  /** Czy Test poziomu jest włączony w Ustawieniach. Wyłączony ukrywa link do testu. */
+  pokazTest?: boolean;
+  /** Start paska wyliczony z pierwszych dróg w stylu RP/OS (null, dopóki ich za mało) */
+  startZDrogRP?: string | null;
+  startZDrogOS?: string | null;
 };
 
-export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, trudnoscTestu }: Props) {
+export default function MegaCel({
+  najtrudniejszaRP,
+  najtrudniejszaOS,
+  trudnoscTestu,
+  pokazTest = true,
+  startZDrogRP = null,
+  startZDrogOS = null,
+}: Props) {
   const [cel, setCel] = useState<Cel | null>(null);
   const [ladowanie, setLadowanie] = useState(true);
   const [edycja, setEdycja] = useState(false);
@@ -199,50 +211,63 @@ export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, trudnoscTe
     );
   }
 
-  // Bez testu poziomu nie mamy wiarygodnego punktu startowego dla paska.
-  if (!trudnoscTestu) {
+  const najtrudniejszaWStylu = cel.styl_docelowy === "OS" ? najtrudniejszaOS : najtrudniejszaRP;
+  const startZDrog = cel.styl_docelowy === "OS" ? startZDrogOS : startZDrogRP;
+
+  // Punkt startowy paska: wynik testu (jeśli test jest włączony i wykonany),
+  // w przeciwnym razie najtrudniejsza z pierwszych dróg w stylu celu.
+  const startZTestu = pokazTest ? trudnoscTestu : null;
+  const trudnoscStartowa = startZTestu ?? startZDrog;
+  const zrodloStartu = startZTestu ? "test poziomu" : "pierwsze drogi";
+
+  // Brak wiarygodnego punktu startowego - pokazujemy tylko cel.
+  if (!trudnoscStartowa) {
     return (
       <Card className="p-5 mt-8">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-gray-500 text-sm">
-            Mega Cel · {cel.styl_docelowy}
-          </div>
+          <div className="text-gray-500 text-sm">Mega Cel · {cel.styl_docelowy}</div>
           <button onClick={() => setEdycja(true)} className="text-gray-400 hover:text-gray-700">
             <Pencil size={16} />
           </button>
         </div>
         <div className="flex items-center gap-3 text-2xl font-bold mb-3">
-          <span className="text-gray-400">—</span>
+          <span className={najtrudniejszaWStylu ? "" : "text-gray-400"}>
+            {najtrudniejszaWStylu ?? "—"}
+          </span>
           <span className="text-gray-400">→</span>
           <span className="text-blue-600">{cel.trudnosc_docelowa}</span>
         </div>
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="text-gray-500 text-sm">
-            Zrób test poziomu, żeby zobaczyć pasek postępu do celu.
+        {pokazTest ? (
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-gray-500 text-sm">
+              Zrób test poziomu albo dodaj kilka dróg w stylu {cel.styl_docelowy}, żeby zobaczyć
+              pasek postępu do celu.
+            </div>
+            <Link href="/dna" className={buttonVariants({ size: "sm" })}>
+              Zrób test poziomu
+            </Link>
           </div>
-          <Link href="/dna" className={buttonVariants({ size: "sm" })}>
-            Zrób test poziomu
-          </Link>
-        </div>
+        ) : (
+          <div className="text-gray-500 text-sm">
+            Dodaj kilka dróg w stylu {cel.styl_docelowy}, a pojawi się pasek postępu do celu.
+          </div>
+        )}
       </Card>
     );
   }
 
-  // Aktualny poziom: test poziomu, albo zarejestrowana droga w stylu zgodnym
-  // z celem (OS/RP), jeśli jest trudniejsza niż wynik testu — bierzemy wyższą
-  // z dwóch, więc pasek automatycznie przełącza się na realne dane, gdy się pojawią.
-  const najtrudniejszaWStylu = cel.styl_docelowy === "OS" ? najtrudniejszaOS : najtrudniejszaRP;
+  // Aktualny poziom: punkt startowy albo zarejestrowana droga w stylu zgodnym z celem
+  // (OS/RP), jeśli jest trudniejsza — bierzemy wyższą z dwóch, więc pasek
+  // automatycznie przełącza się na realne dane, gdy się pojawią.
   const trudnoscObecna = najtrudniejszaOcena(
-    [trudnoscTestu, najtrudniejszaWStylu].filter((t): t is string => t !== null)
+    [trudnoscStartowa, najtrudniejszaWStylu].filter((t): t is string => t !== null)
   );
-  const pasek = policzPasekPostepu(trudnoscTestu, trudnoscObecna, cel.trudnosc_docelowa!);
+  const pasek = policzPasekPostepu(trudnoscStartowa, trudnoscObecna, cel.trudnosc_docelowa!);
 
   return (
     <Card className="p-5 mt-8">
       <div className="flex items-center justify-between mb-3">
-        <div className="text-gray-500 text-sm">
-          Mega Cel · {cel.styl_docelowy}
-        </div>
+        <div className="text-gray-500 text-sm">Mega Cel · {cel.styl_docelowy}</div>
         <button onClick={() => setEdycja(true)} className="text-gray-400 hover:text-gray-700">
           <Pencil size={16} />
         </button>
@@ -273,7 +298,7 @@ export default function MegaCel({ najtrudniejszaRP, najtrudniejszaOS, trudnoscTe
             ))}
           </div>
           <div className="text-gray-400 text-xs mt-1">
-            Start: {pasek.trudnoscStartowa} (test poziomu)
+            Start: {pasek.trudnoscStartowa} ({zrodloStartu})
           </div>
         </div>
       )}

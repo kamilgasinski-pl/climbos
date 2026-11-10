@@ -1,5 +1,6 @@
 "use client";
 
+import { useKompetencjeWlaczone } from "./useKompetencjeWlaczone";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabaseclient";
 import { Card } from "@/components/ui/card";
@@ -110,6 +111,7 @@ function podpisDnia(bloki: BlokDoPorownania[], dzien: number): string {
 }
 
 export default function HarmonogramTygodniowy() {
+  const kompetencjeWlaczone = useKompetencjeWlaczone();
   const [kategorie, setKategorie] = useState<Kategoria[]>([]);
   const [zestawy, setZestawy] = useState<ZestawSkrot[]>([]);
   const [bloki, setBloki] = useState<Blok[]>([]);
@@ -855,22 +857,57 @@ export default function HarmonogramTygodniowy() {
             />
           </div>
 
-          <div className="flex items-center justify-between mt-3">
-            <button
-              type="button"
-              onClick={() => setPokazKompetencje(!pokazKompetencje)}
-              className="text-sm text-blue-600 hover:underline"
-            >
-              {pokazKompetencje
-                ? "− Ukryj kompetencje"
-                : wybraneKompetencje.length > 0
-                ? `+ Kompetencje (${wybraneKompetencje.length})`
-                : "+ Dodaj kompetencje (opcjonalnie)"}
-            </button>
+                    <div className="flex items-center justify-between mt-3">
+            {kompetencjeWlaczone ? (
+              <button
+                type="button"
+                onClick={() => setPokazKompetencje(!pokazKompetencje)}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                {pokazKompetencje
+                  ? "− Ukryj kompetencje"
+                  : wybraneKompetencje.length > 0
+                  ? `+ Kompetencje (${wybraneKompetencje.length})`
+                  : "+ Dodaj kompetencje (opcjonalnie)"}
+              </button>
+            ) : (
+              <span />
+            )}
             <Button onClick={zapiszBlok} disabled={zapisywanie}>
               {zapisywanie ? "Zapisywanie..." : edytowanyBlokId ? "Zapisz zmiany" : "Zapisz blok"}
             </Button>
           </div>
+
+          {kompetencjeWlaczone && pokazKompetencje && (
+            <div className="mt-3">
+              <div className="text-gray-500 text-xs mb-2">
+                Które kompetencje rozwija ten blok? (opcjonalnie)
+              </div>
+              <div className="flex flex-col gap-2">
+                {(Object.keys(FILARY) as Filar[]).map((filar) => (
+                  <div key={filar} className="flex items-center gap-2 flex-wrap">
+                    <span className="text-gray-400 text-xs w-[70px] shrink-0">
+                      {NAZWY_FILAROW[filar]}
+                    </span>
+                    {FILARY[filar].map((klucz) => (
+                      <button
+                        key={klucz}
+                        type="button"
+                        onClick={() => przelaczKompetencje(klucz)}
+                        className={`px-2.5 py-1 rounded-md text-xs border transition-colors ${
+                          wybraneKompetencje.includes(klucz)
+                            ? "bg-gray-900 border-gray-900 text-white"
+                            : "border-gray-300 text-gray-600 hover:border-gray-400"
+                        }`}
+                      >
+                        {NAZWY_KOMPETENCJI[klucz]}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {pokazKompetencje && (
             <div className="mt-3">

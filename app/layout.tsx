@@ -1,12 +1,15 @@
 "use client";
 import AuthProvider from "./authprovider";
-import { Mountain, Home, BookOpen, Calendar, Dna, CalendarDays, User, LifeBuoy } from "lucide-react";
+import { Mountain, Home, BookOpen, Calendar, Dna, CalendarDays, User, LifeBuoy,Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
 import WylogujButton from "./components/WylogujButton";
+
+
+
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -17,6 +20,7 @@ const linki = [
   { href: "/sesje", label: "Sesje", ikona: Calendar },
   { href: "/dna", label: "DNA", ikona: Dna },
   { href: "/profil", label: "Profil", ikona: User },
+  { href: "/ustawienia", label: "Ustawienia", ikona: Settings },
   { href: "/pomoc", label: "Pomoc", ikona: LifeBuoy },
 ];
 

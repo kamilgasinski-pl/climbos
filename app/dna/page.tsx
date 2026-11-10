@@ -24,6 +24,8 @@ import TestPoziomu from "../components/TestPoziomu";
 import { Loader2 } from "lucide-react";
 import WykresPomiarowCiala from "../components/WykresPomiarowCiala";
 import { liczySieDoProgresji } from "../engine/gradeEngine";
+import { useKompetencjeWlaczone } from "../components/useKompetencjeWlaczone";
+import { useTestPoziomuWlaczony } from "../components/useTestPoziomuWlaczony";
 
 type Przejscie = {
   id: number;
@@ -60,6 +62,9 @@ type WidokProgresji = "zDolem" | "wedka";
 const STYLE_Z_DOLEM = ["Flash", "OS", "RP"];
 
 export default function DNA() {
+  const kompetencjeWlaczone = useKompetencjeWlaczone();
+  const testPoziomuWlaczony = useTestPoziomuWlaczony();
+
   const [sesje, setSesje] = useState<Sesja[]>([]);
   const [bloki, setBloki] = useState<Blok[]>([]);
   const [wykonania, setWykonania] = useState<Wykonanie[]>([]);
@@ -139,8 +144,14 @@ export default function DNA() {
 
   return (
     <main className="p-10 font-sans">
-      <h1 className="text-3xl font-bold">DNA (Kompetencje)</h1>
-      <p className="text-gray-500">Twój profil wspinaczkowy, oparty na realnych przejściach</p>
+      <h1 className="text-3xl font-bold">
+        {kompetencjeWlaczone ? "DNA (Kompetencje)" : "DNA"}
+      </h1>
+      <p className="text-gray-500">
+        {kompetencjeWlaczone
+          ? "Twój profil wspinaczkowy, oparty na realnych przejściach"
+          : "Twój profil wspinaczkowy, oparty na realnych przejściach"}
+      </p>
 
       <div className="flex gap-2 mt-5 flex-wrap">
         <Button
@@ -162,11 +173,11 @@ export default function DNA() {
           Historia
         </Button>
         <Button
-          variant={aktywnaZakladka === "test" ? "default" : "outline"}
-          onClick={() => setAktywnaZakladka("test")}
-        >
-          Test poziomu
-        </Button>
+            variant={aktywnaZakladka === "test" ? "default" : "outline"}
+            onClick={() => setAktywnaZakladka("test")}
+          >
+            Test poziomu
+          </Button>
       </div>
 
       {ladowanie ? (
@@ -201,32 +212,36 @@ export default function DNA() {
             <WykresProgresji dane={progresjaWCzasie} />
           </Card>
 
-          <div className="flex items-center justify-between mt-8">
-            <h2 className="text-xl font-bold">Twoje kompetencje</h2>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant={widokKompetencji === "ogolny" ? "default" : "outline"}
-                onClick={() => setWidokKompetencji("ogolny")}
-              >
-                Ogólny
-              </Button>
-              <Button
-                size="sm"
-                variant={widokKompetencji === "szczegolowy" ? "default" : "outline"}
-                onClick={() => setWidokKompetencji("szczegolowy")}
-              >
-                Szczegółowy
-              </Button>
-            </div>
-          </div>
-          <Card className="p-4">
-            <WykresKompetencji dane={daneWykresuKompetencji} />
-          </Card>
+          {kompetencjeWlaczone && (
+            <>
+              <div className="flex items-center justify-between mt-8">
+                <h2 className="text-xl font-bold">Twoje kompetencje</h2>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant={widokKompetencji === "ogolny" ? "default" : "outline"}
+                    onClick={() => setWidokKompetencji("ogolny")}
+                  >
+                    Ogólny
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={widokKompetencji === "szczegolowy" ? "default" : "outline"}
+                    onClick={() => setWidokKompetencji("szczegolowy")}
+                  >
+                    Szczegółowy
+                  </Button>
+                </div>
+              </div>
+              <Card className="p-4">
+                <WykresKompetencji dane={daneWykresuKompetencji} />
+              </Card>
 
-                    <div className="mt-8">
-            <PaskiKompetencji kompetencje={kompetencje} />
-          </div>
+              <div className="mt-8">
+                <PaskiKompetencji kompetencje={kompetencje} />
+              </div>
+            </>
+          )}
 
           <h2 className="text-xl font-bold mt-8 mb-3">Skład ciała</h2>
           <WykresPomiarowCiala />

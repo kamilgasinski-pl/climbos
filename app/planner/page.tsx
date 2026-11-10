@@ -13,6 +13,9 @@ import { useSearchParams } from "next/navigation";
 import Projekty from "../components/Projekty";
 import ZestawyCwiczen from "../components/ZestawyCwiczen";
 import PostepZestawow from "../components/PostepZestawow";
+import { pobierzUstawienia } from "../engine/ustawieniaEngine";
+import { useTestPoziomuWlaczony } from "./components/useTestPoziomuWlaczony";
+
 
 type Sesja = {
   id: number;
@@ -133,8 +136,17 @@ export default function Planner() {
   const [czasTrwania, setCzasTrwania] = useState(60);
   const [notatka, setNotatka] = useState("");
 
-  useEffect(() => {
+    useEffect(() => {
     pobierzNadchodzace();
+  }, []);
+
+  useEffect(() => {
+    pobierzUstawienia().then((u) => {
+      // Domyślna zakładka działa tylko, gdy link nie wskazuje własnej (?tab=...).
+      if (!searchParams.get("tab")) setAktywnaZakladka(u.domyslna_zakladka_plannera);
+      setWidokZakres(u.domyslny_widok_sesji);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function pobierzNadchodzace() {

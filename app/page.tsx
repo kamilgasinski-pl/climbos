@@ -15,6 +15,8 @@ import {
 import MegaCel from "./components/MegaCel";
 import ZblizajacyCel from "./components/ZblizajacyCel";
 import DzisiejszeAktywnosci from "./components/DzisiejszeAktywnosci";
+import PodsumowanieTreningow from "./components/PodsumowanieTreningow";
+import { useTestPoziomuWlaczony } from "./components/useTestPoziomuWlaczony";
 import Link from "next/link";
 
 type Przejscie = {
@@ -49,7 +51,27 @@ type WynikTestu = {
   data_testu: string;
 };
 
+/** Ile pierwszych dróg w danym stylu wyznacza punkt startowy Mega Celu, gdy nie ma testu poziomu. */
+const LICZBA_DROG_DO_STARTU = 3;
+
+/**
+ * Najtrudniejsza z pierwszych (chronologicznie) dróg w danym stylu.
+ * Zwraca null, dopóki nie ma ich dość, żeby ustalić wiarygodny start.
+ */
+function ocenaStartowaZDrog(sesje: Sesja[], styl: string): string | null {
+  const pierwszeDrogi = [...sesje]
+    .sort((a, b) => a.data_treningu.localeCompare(b.data_treningu) || a.id - b.id)
+    .flatMap((s) => [...s.przejscia].sort((a, b) => a.id - b.id))
+    .filter((p) => p.styl === styl)
+    .slice(0, LICZBA_DROG_DO_STARTU);
+
+  if (pierwszeDrogi.length < LICZBA_DROG_DO_STARTU) return null;
+  return najtrudniejszaOcena(pierwszeDrogi.map((p) => p.trudnosc));
+}
+
 export default function Home() {
+  const testPoziomuWlaczony = useTestPoziomuWlaczony();
+
   const [sesje, setSesje] = useState<Sesja[]>([]);
   const [blokiTreningowe, setBlokiTreningowe] = useState<BlokKompetencje[]>([]);
   const [wykonaniaBlokow, setWykonaniaBlokow] = useState<WykonanieBloku[]>([]);
@@ -129,6 +151,9 @@ export default function Home() {
     (p) => p.styl === "OS" || p.styl === "RP" || p.styl === "Projekt"
   ).length;
 
+  const startZDrogRP = ocenaStartowaZDrog(sesje, "RP");
+  const startZDrogOS = ocenaStartowaZDrog(sesje, "OS");
+
   const ostatniaSesja = sesje[0];
 
   const kompetencjeZDrog = policzKompetencje(wszystkiePrzejscia);
@@ -137,7 +162,9 @@ export default function Home() {
     wykonaniaBlokow
   );
   const kompetencjeZCelowSesji = policzKompetencjeZCelowSesji(celeSesji);
-  const profilKompetencji = polaczKompetencje(
+  // Profil kompetencji nie jest już pokazywany na Home (przeniesiony do DNA);
+  // zostawiamy obliczenie, gdyby było potrzebne w przyszłości.
+  void polaczKompetencje(
     polaczKompetencje(kompetencjeZDrog, kompetencjeZTreningu),
     kompetencjeZCelowSesji
   );
@@ -149,10 +176,13 @@ export default function Home() {
 
       {/* Mega Cel zawsze na górze - stałe przypomnienie co mamy osiągnąć */}
       <MegaCel
-  najtrudniejszaRP={najtrudniejszaRP}
-  najtrudniejszaOS={najtrudniejszaOS}
-  trudnoscTestu={najnowszyTest?.ocena_koncowa ?? null}
-/>
+        najtrudniejszaRP={najtrudniejszaRP}
+        najtrudniejszaOS={najtrudniejszaOS}
+        trudnoscTestu={najnowszyTest?.ocena_koncowa ?? null}
+        pokazTest={testPoziomuWlaczony}
+        startZDrogRP={startZDrogRP}
+        startZDrogOS={startZDrogOS}
+      />
 
       <ZblizajacyCel />
 
@@ -185,30 +215,32 @@ export default function Home() {
         </CardContent>
       </Card>
 
-      <Card className="mt-6 p-4">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <div className="text-gray-500 text-sm">Szacowany poziom (test)</div>
-            {najnowszyTest ? (
-              <>
-                <div className="text-xl font-bold">{najnowszyTest.ocena_koncowa}</div>
-                <div className="text-gray-400 text-xs mt-0.5">
-                  {new Date(najnowszyTest.data_testu).toLocaleDateString("pl-PL", {
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </div>
-              </>
-            ) : (
-              <div className="text-gray-400 text-sm mt-1">Jeszcze nie wykonano testu</div>
-            )}
+      {testPoziomuWlaczony && (
+        <Card className="mt-6 p-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <div className="text-gray-500 text-sm">Szacowany poziom (test)</div>
+              {najnowszyTest ? (
+                <>
+                  <div className="text-xl font-bold">{najnowszyTest.ocena_koncowa}</div>
+                  <div className="text-gray-400 text-xs mt-0.5">
+                    {new Date(najnowszyTest.data_testu).toLocaleDateString("pl-PL", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="text-gray-400 text-sm mt-1">Jeszcze nie wykonano testu</div>
+              )}
+            </div>
+            <Link href="/dna" className={buttonVariants({ size: "sm" })}>
+              {najnowszyTest ? "Zrób test ponownie" : "Zrób test poziomu"}
+            </Link>
           </div>
-          <Link href="/dna" className={buttonVariants({ size: "sm" })}>
-            {najnowszyTest ? "Zrób test ponownie" : "Zrób test poziomu"}
-          </Link>
-        </div>
-      </Card>
+        </Card>
+      )}
 
       {/* Co dziś do zrobienia */}
       <DzisiejszeAktywnosci onZmianaAction={pobierzKompetencjeTreningowe} />
@@ -219,13 +251,15 @@ export default function Home() {
           <div className="text-lg font-bold">
             {ostatniaSesja.miejsce} — {ostatniaSesja.data_treningu}
           </div>
-                    <div className="mt-2">
+          <div className="mt-2">
             <Link href={`/sesje/${ostatniaSesja.id}`} className={buttonVariants({ size: "sm" })}>
               Zobacz szczegóły
             </Link>
           </div>
         </div>
       )}
+
+      <PodsumowanieTreningow />
 
       <div className="mt-8">
         <Link href="/sesje" className={buttonVariants()}>

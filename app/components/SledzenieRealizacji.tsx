@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "../supabaseclient";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { pobierzUstawienia } from "../engine/ustawieniaEngine";
 import { Check, X } from "lucide-react";
 import {
   zapewnijTydzien,
@@ -43,9 +44,9 @@ type Wiersz = {
   kolor: string;
 };
 
-function terminUplynal(blok: Blok): boolean {
+function terminUplynal(blok: Blok, dniNaWykonanie: number): boolean {
   const termin = dataZISO(blok.tydzien_start);
-  termin.setDate(termin.getDate() + blok.dzien_tygodnia + 7);
+  termin.setDate(termin.getDate() + blok.dzien_tygodnia + dniNaWykonanie);
   return new Date() > termin;
 }
 
@@ -57,12 +58,14 @@ export default function SledzenieRealizacji() {
   const [bladPobierania, setBladPobierania] = useState("");
   const [pokazHistorie, setPokazHistorie] = useState(false);
   const [liczbaTygodniHistorii, setLiczbaTygodniHistorii] = useState(KROK_HISTORII);
+  const [dniNaWykonanie, setDniNaWykonanie] = useState(7);
 
   useEffect(() => {
     zaladuj();
   }, []);
 
   async function zaladuj() {
+    pobierzUstawienia().then((u) => setDniNaWykonanie(u.dni_na_wykonanie_bloku));
     try {
       await zapewnijTydzien(poniedzialekISO(new Date()));
     } catch (e) {
@@ -235,7 +238,7 @@ export default function SledzenieRealizacji() {
                 {tygodnie.map((t) => {
                   const blok = mapaBlokow.get(`${t}|${wiersz.linia}|${wiersz.dzien}`);
                   const wykonano = blok ? wykonania.some((w) => w.blok_id === blok.id) : false;
-                  const przegapiony = blok ? !wykonano && terminUplynal(blok) : false;
+                  const przegapiony = blok ? !wykonano && terminUplynal(blok, dniNaWykonanie) : false;
 
                   return (
                     <td

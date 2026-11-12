@@ -78,6 +78,11 @@ function opisRPE(rpe: number): string {
   return "maksymalny wysiłek";
 }
 
+// Część drogi i blok mają sens tylko przy próbach (Projekt/Próba) i wędce.
+function czyMoznaCzesciowo(styl: string): boolean {
+  return styl === "Projekt" || styl === "Wędka";
+}
+
 function nowyWiersz(): WierszDrogi {
   return {
     klucz: crypto.randomUUID(),
@@ -424,8 +429,8 @@ export default function SzczegolySesji() {
       nazwa_drogi: w.nazwaDrogi,
       trudnosc: w.trudnosc,
       styl: w.styl,
-      stopien_ukonczenia: w.stopienUkonczenia,
-      blok: w.blok,
+      stopien_ukonczenia: czyMoznaCzesciowo(w.styl) ? w.stopienUkonczenia : "cala",
+      blok: czyMoznaCzesciowo(w.styl) ? w.blok : false,
       sesja_id: sesjaId,
     }));
 
@@ -485,8 +490,8 @@ export default function SzczegolySesji() {
         nazwa_drogi: edytowanaNazwa,
         trudnosc: edytowanaTrudnosc,
         styl: edytowanyStyl,
-        stopien_ukonczenia: edytowanyStopienUkonczenia,
-        blok: edytowanyBlok,
+        stopien_ukonczenia: czyMoznaCzesciowo(edytowanyStyl) ? edytowanyStopienUkonczenia : "cala",
+        blok: czyMoznaCzesciowo(edytowanyStyl) ? edytowanyBlok : false,
       })
       .eq("id", id);
 
@@ -912,7 +917,7 @@ export default function SzczegolySesji() {
           <Input
             value={nowyCelTytul}
             onChange={(e) => setNowyCelTytul(e.target.value)}
-            placeholder="Nazwa celu (np. 3x lot)"
+            placeholder="Dodaj cele sesji treningowej..."
             className="w-[220px]"
           />
         </div>
@@ -1048,7 +1053,15 @@ export default function SzczegolySesji() {
                 )}
                 <Select
                   value={w.styl}
-                  onValueChange={(value) => aktualizujWiersz(w.klucz, { styl: value ?? "OS" })}
+                  onValueChange={(value) => {
+                    const styl = value ?? "OS";
+                    aktualizujWiersz(
+                      w.klucz,
+                      czyMoznaCzesciowo(styl)
+                        ? { styl }
+                        : { styl, stopienUkonczenia: "cala", blok: false }
+                    );
+                  }}
                 >
                   <SelectTrigger className="w-[160px]">
                     <SelectValue />
@@ -1061,6 +1074,8 @@ export default function SzczegolySesji() {
                     <SelectItem value="Wędka">Wędka</SelectItem>
                   </SelectContent>
                 </Select>
+                {czyMoznaCzesciowo(w.styl) && (
+                  <>
                 <Select
                   value={w.stopienUkonczenia}
                   onValueChange={(value) =>
@@ -1087,6 +1102,8 @@ export default function SzczegolySesji() {
                   />
                   Blok
                 </label>
+                  </>
+                )}
                 {wiersze.length > 1 && (
                   <button
                     onClick={() => usunWiersz(w.klucz)}
@@ -1159,7 +1176,17 @@ export default function SzczegolySesji() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Select value={edytowanyStyl} onValueChange={(value) => setEdytowanyStyl(value ?? "OS")}>
+                    <Select
+                      value={edytowanyStyl}
+                      onValueChange={(value) => {
+                        const styl = value ?? "OS";
+                        setEdytowanyStyl(styl);
+                        if (!czyMoznaCzesciowo(styl)) {
+                          setEdytowanyStopienUkonczenia("cala");
+                          setEdytowanyBlok(false);
+                        }
+                      }}
+                    >
                       <SelectTrigger className="w-[160px]">
                         <SelectValue />
                       </SelectTrigger>
@@ -1171,6 +1198,8 @@ export default function SzczegolySesji() {
                         <SelectItem value="Wędka">Wędka</SelectItem>
                       </SelectContent>
                     </Select>
+                    {czyMoznaCzesciowo(edytowanyStyl) && (
+                      <>
                     <Select
                       value={edytowanyStopienUkonczenia}
                       onValueChange={(value) =>
@@ -1197,6 +1226,8 @@ export default function SzczegolySesji() {
                       />
                       Blok
                     </label>
+                      </>
+                    )}
                     <Button size="sm" onClick={() => zapiszEdycjePrzejscia(p.id)} disabled={zapisywaniePrzejscia}>
                       {zapisywaniePrzejscia ? "Zapisywanie..." : "Zapisz"}
                     </Button>

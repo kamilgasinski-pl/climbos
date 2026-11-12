@@ -15,9 +15,11 @@ import {
 import MegaCel from "./components/MegaCel";
 import ZblizajacyCel from "./components/ZblizajacyCel";
 import DzisiejszeAktywnosci from "./components/DzisiejszeAktywnosci";
+import Projekty from "./components/Projekty";
 import PodsumowanieTreningow from "./components/PodsumowanieTreningow";
 import { useTestPoziomuWlaczony } from "./components/useTestPoziomuWlaczony";
 import Link from "next/link";
+
 
 type Przejscie = {
   id: number;
@@ -244,6 +246,8 @@ export default function Home() {
 
       {/* Co dziś do zrobienia */}
       <DzisiejszeAktywnosci onZmianaAction={pobierzKompetencjeTreningowe} />
+
+<Projekty tylkoAktywne />
 
       {ostatniaSesja && (
         <div className="mt-5 p-4 bg-white border border-gray-300 rounded-lg">

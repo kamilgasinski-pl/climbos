@@ -119,7 +119,9 @@ function PrzyciskZdjecia({
   );
 }
 
-export default function Projekty() {
+// tylkoAktywne = widok skrócony (np. strona główna): bez formularza dodawania
+// i bez listy ukończonych, tylko aktywne projekty.
+export default function Projekty({ tylkoAktywne = false }: { tylkoAktywne?: boolean }) {
   const [projekty, setProjekty] = useState<Projekt[]>([]);
   const [urle, setUrle] = useState<Record<string, string>>({});
   const [ladowanie, setLadowanie] = useState(true);
@@ -356,74 +358,86 @@ export default function Projekty() {
       return new Date(b.data_zamkniecia).getTime() - new Date(a.data_zamkniecia).getTime();
     });
 
-  return (
+  // Na stronie głównej nie pokazujemy pustej sekcji.
+  if (tylkoAktywne && !ladowanie && !bladPobierania && aktywne.length === 0) return null;
+
+  const tresc = (
     <div>
-      <h2 className="text-xl font-bold">Dodaj projekty</h2>
-      <p className="text-gray-500 text-sm mt-1">
-        Drogi, nad którymi aktualnie pracujesz.
-      </p>
+      {!tylkoAktywne && (
+        <>
+          <h2 className="text-xl font-bold">Dodaj projekty</h2>
+          <p className="text-gray-500 text-sm mt-1">
+            Drogi, nad którymi aktualnie pracujesz.
+          </p>
 
-      <div className="flex flex-col gap-2 mt-3">
-        {wiersze.map((w) => (
-          <Card key={w.klucz} className="flex flex-row items-center gap-2 p-3 flex-wrap">
-            <Input
-              value={w.nazwa}
-              onChange={(e) => aktualizujWiersz(w.klucz, { nazwa: e.target.value })}
-              placeholder="Nazwa drogi"
-              className="w-[180px]"
-            />
-            <Select
-              value={w.trudnosc}
-              onValueChange={(value) => aktualizujWiersz(w.klucz, { trudnosc: value ?? "" })}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Trudność" />
-              </SelectTrigger>
-              <SelectContent>
-                {SKALA_KURTYKI.map((o) => (
-                  <SelectItem key={o} value={o}>
-                    {o}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
-              type="number"
-              min={0}
-              inputMode="numeric"
-              value={w.wpinki}
-              onChange={(e) => aktualizujWiersz(w.klucz, { wpinki: e.target.value })}
-              placeholder="Wpinki"
-              className="w-[100px]"
-              autoComplete="off"
-            />
-            <PrzyciskZdjecia
-              plik={w.plik}
-              onWybierz={(plik) => aktualizujWiersz(w.klucz, { plik })}
-            />
-            {wiersze.length > 1 && (
-              <button
-                onClick={() => usunWiersz(w.klucz)}
-                className="text-gray-400 hover:text-red-600 ml-auto"
-              >
-                <X size={18} />
-              </button>
-            )}
-          </Card>
-        ))}
+          <div className="flex flex-col gap-2 mt-3">
+            {wiersze.map((w) => (
+              <Card key={w.klucz} className="flex flex-row items-center gap-2 p-3 flex-wrap">
+                <Input
+                  value={w.nazwa}
+                  onChange={(e) => aktualizujWiersz(w.klucz, { nazwa: e.target.value })}
+                  placeholder="Nazwa drogi"
+                  className="w-[180px]"
+                />
+                <Select
+                  value={w.trudnosc}
+                  onValueChange={(value) => aktualizujWiersz(w.klucz, { trudnosc: value ?? "" })}
+                >
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Trudność" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SKALA_KURTYKI.map((o) => (
+                      <SelectItem key={o} value={o}>
+                        {o}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  value={w.wpinki}
+                  onChange={(e) => aktualizujWiersz(w.klucz, { wpinki: e.target.value })}
+                  placeholder="Wpinki"
+                  className="w-[100px]"
+                  autoComplete="off"
+                />
+                <PrzyciskZdjecia
+                  plik={w.plik}
+                  onWybierz={(plik) => aktualizujWiersz(w.klucz, { plik })}
+                />
+                {wiersze.length > 1 && (
+                  <button
+                    onClick={() => usunWiersz(w.klucz)}
+                    className="text-gray-400 hover:text-red-600 ml-auto"
+                  >
+                    <X size={18} />
+                  </button>
+                )}
+              </Card>
+            ))}
 
-        <div className="flex gap-2 mt-1">
-          <Button variant="outline" onClick={dodajWiersz}>
-            + Dodaj kolejny projekt
-          </Button>
-          <Button onClick={zapiszProjekty} disabled={zapisywanie}>
-            {zapisywanie ? "Zapisywanie..." : "Zapisz projekty"}
-          </Button>
-        </div>
-      </div>
-      {bladFormularza && <p className="text-red-600 text-sm mt-2">{bladFormularza}</p>}
+            <div className="flex gap-2 mt-1">
+              <Button variant="outline" onClick={dodajWiersz}>
+                + Dodaj kolejny projekt
+              </Button>
+              <Button onClick={zapiszProjekty} disabled={zapisywanie}>
+                {zapisywanie ? "Zapisywanie..." : "Zapisz projekty"}
+              </Button>
+            </div>
+          </div>
+          {bladFormularza && <p className="text-red-600 text-sm mt-2">{bladFormularza}</p>}
+        </>
+      )}
 
-      <h2 className="text-xl font-bold mt-8">Twoje projekty</h2>
+      <h2 className={`text-xl font-bold ${tylkoAktywne ? "" : "mt-8"}`}>
+        {tylkoAktywne ? "Aktywne projekty" : "Twoje projekty"}
+      </h2>
+      {tylkoAktywne && (
+        <p className="text-gray-500 text-sm mt-1">Twoje aktualne projekty</p>
+      )}
       {bladPobierania && <p className="text-red-600 text-sm mt-2">{bladPobierania}</p>}
 
       {ladowanie ? (
@@ -436,7 +450,7 @@ export default function Projekty() {
           Brak aktywnych projektów — dodaj drogę, nad którą pracujesz.
         </p>
       ) : (
-        <ul className="list-none p-0 mt-3">
+        <ul className="list-none p-0 mt-3 flex flex-col gap-2">
           {aktywne.map((p) =>
             edytowanyId === p.id ? (
               <li key={p.id}>
@@ -535,50 +549,57 @@ export default function Projekty() {
         </ul>
       )}
 
-      <h2 className="text-xl font-bold mt-8">Ukończone projekty</h2>
-      <Card className="p-4 mt-3">
-        {ukonczone.length === 0 ? (
-          <p className="text-gray-400 text-sm">Jeszcze żaden projekt nie został zamknięty.</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {ukonczone.map((p) => (
-              <div key={p.id} className="flex items-center gap-3 text-sm">
-                <span>🏆</span>
-                {p.zdjecie_sciezka && urle[p.zdjecie_sciezka] && (
-                  <a
-                    href={urle[p.zdjecie_sciezka]}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={urle[p.zdjecie_sciezka]}
-                      alt={p.nazwa}
-                      className="w-10 h-10 object-cover rounded-md"
-                    />
-                  </a>
-                )}
-                <span className="flex-1">
-                  <strong>{p.nazwa}</strong>{" "}
-                  <span className="text-gray-500">
-                    {p.trudnosc} ({konwertujOcene(p.trudnosc, "kurtyki", "francuska")})
-                  </span>
-                </span>
-                <span className="text-gray-400 text-xs">
-                  {p.data_zamkniecia ? formatujDate(p.data_zamkniecia) : "—"}
-                </span>
-                <button
-                  onClick={() => ustawZamkniecie(p, false)}
-                  className="text-xs text-gray-400 hover:text-gray-700 hover:underline"
-                >
-                  Przywróć
-                </button>
+      {!tylkoAktywne && (
+        <>
+          <h2 className="text-xl font-bold mt-8">Ukończone projekty</h2>
+          <Card className="p-4 mt-3">
+            {ukonczone.length === 0 ? (
+              <p className="text-gray-400 text-sm">Jeszcze żaden projekt nie został zamknięty.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {ukonczone.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3 text-sm">
+                    <span>🏆</span>
+                    {p.zdjecie_sciezka && urle[p.zdjecie_sciezka] && (
+                      <a
+                        href={urle[p.zdjecie_sciezka]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={urle[p.zdjecie_sciezka]}
+                          alt={p.nazwa}
+                          className="w-10 h-10 object-cover rounded-md"
+                        />
+                      </a>
+                    )}
+                    <span className="flex-1">
+                      <strong>{p.nazwa}</strong>{" "}
+                      <span className="text-gray-500">
+                        {p.trudnosc} ({konwertujOcene(p.trudnosc, "kurtyki", "francuska")})
+                      </span>
+                    </span>
+                    <span className="text-gray-400 text-xs">
+                      {p.data_zamkniecia ? formatujDate(p.data_zamkniecia) : "—"}
+                    </span>
+                    <button
+                      onClick={() => ustawZamkniecie(p, false)}
+                      className="text-xs text-gray-400 hover:text-gray-700 hover:underline"
+                    >
+                      Przywróć
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
-      </Card>
+            )}
+          </Card>
+        </>
+      )}
     </div>
   );
+
+  // Na stronie głównej sekcja ma własne pole, jak "Dzisiejsze aktywności".
+  return tylkoAktywne ? <Card className="mt-5 p-4">{tresc}</Card> : tresc;
 }

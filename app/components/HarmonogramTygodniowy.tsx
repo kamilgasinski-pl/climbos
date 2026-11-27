@@ -1,7 +1,7 @@
 "use client";
 
 import { useKompetencjeWlaczone } from "./useKompetencjeWlaczone";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { supabase } from "../supabaseclient";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -97,6 +97,24 @@ function opisTygodnia(tydzien: string, biezacy: string): string {
 }
 
 /** Tekstowy "odcisk" dnia, żeby sprawdzić czy dzień różni się od szablonu. */
+// Na telefonie (poniżej breakpointu md, 768 px) pokazujemy jeden dzień naraz.
+function useCzyTelefon(): boolean {
+  return useSyncExternalStore(
+    (zmiana) => {
+      const mq = window.matchMedia("(max-width: 767px)");
+      mq.addEventListener("change", zmiana);
+      return () => mq.removeEventListener("change", zmiana);
+    },
+    () => window.matchMedia("(max-width: 767px)").matches,
+    () => false
+  );
+}
+
+function dzienMiesiacISO(iso: string): string {
+  const [, m, d] = iso.split("-");
+  return `${Number(d)}.${m}`;
+}
+
 function podpisDnia(bloki: BlokDoPorownania[], dzien: number): string {
   return bloki
     .filter((b) => b.dzien_tygodnia === dzien)
@@ -119,6 +137,9 @@ export default function HarmonogramTygodniowy() {
   const [bladPobierania, setBladPobierania] = useState("");
 
   const [tydzien, setTydzien] = useState(() => poniedzialekISO(new Date()));
+  const czyTelefon = useCzyTelefon();
+  // Który dzień pokazuje widok telefonu (0 = poniedziałek). Domyślnie dzisiejszy.
+  const [aktywnyDzien, setAktywnyDzien] = useState(() => (new Date().getDay() + 6) % 7);
 
   const [szablon, setSzablon] = useState<RekordBloku[]>([]);
   const [panelSzablonu, setPanelSzablonu] = useState(false);
@@ -159,6 +180,8 @@ export default function HarmonogramTygodniowy() {
   const maSzablon = szablon.length > 0;
   const dniRoznych = DNI_TYGODNIA.map((_, i) => podpisDnia(bloki, i) !== podpisDnia(szablon, i));
   const wszystkieDni = DNI_TYGODNIA.map((_, i) => i);
+  const dniWidoczne = czyTelefon ? [aktywnyDzien] : wszystkieDni;
+  const dzisISO = dodajDniISO(biezacyTydzien, (new Date().getDay() + 6) % 7);
 
   useEffect(() => {
     pobierzZestawy();
@@ -949,7 +972,34 @@ export default function HarmonogramTygodniowy() {
       ) : bladPobierania ? (
         <p className="text-red-600">{bladPobierania}</p>
       ) : (
-        <Card className="p-4 overflow-x-auto">
+        <>
+        {/* zakładki dni na telefonie */}
+        <div className="flex gap-1 md:hidden">
+          {wszystkieDni.map((i) => {
+            const data = dodajDniISO(tydzien, i);
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setAktywnyDzien(i)}
+                className={`flex-1 rounded-full py-1.5 text-sm transition-colors ${
+                  aktywnyDzien === i ? "bg-gray-900 text-white" : "bg-gray-200 text-gray-700"
+                }`}
+              >
+                {DNI_SKROT[i]}
+                <span
+                  className={`block text-[10px] ${
+                    data === dzisISO ? "font-bold opacity-100" : "opacity-70"
+                  }`}
+                >
+                  {dzienMiesiacISO(data)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <Card className="p-2 md:p-4 overflow-x-auto">
           {bloki.length === 0 && (
             <p className="text-gray-400 text-sm mb-3">
               Ten tydzień nie ma jeszcze bloków — przeciągnij po siatce, żeby dodać pierwszy.
@@ -958,14 +1008,16 @@ export default function HarmonogramTygodniowy() {
           <div
             className="grid text-sm select-none"
             style={{
-              gridTemplateColumns: `60px repeat(7, minmax(120px, 1fr))`,
+              gridTemplateColumns: `${czyTelefon ? "44px" : "60px"} repeat(${dniWidoczne.length}, minmax(${
+                czyTelefon ? "0" : "120px"
+              }, 1fr))`,
               gridTemplateRows: `auto repeat(${liczbaGodzin}, 36px)`,
             }}
           >
             <div />
-            {DNI_TYGODNIA.map((d) => (
+            {dniWidoczne.map((d) => (
               <div key={d} className="font-bold text-center pb-2 border-b border-gray-200">
-                {d}
+                {DNI_TYGODNIA[d]}
               </div>
             ))}
 
@@ -982,7 +1034,7 @@ export default function HarmonogramTygodniowy() {
               );
             })}
 
-            {DNI_TYGODNIA.map((_, dzienIndex) =>
+            {dniWidoczne.map((dzienIndex, kolumna) =>
               Array.from({ length: liczbaGodzin }).map((_, i) => {
                 const zaznaczone =
                   zaznaczenie &&
@@ -1004,14 +1056,17 @@ export default function HarmonogramTygodniowy() {
                     className={`border-t border-l border-gray-100 cursor-pointer transition-colors ${
                       zaznaczone ? "bg-blue-100" : "hover:bg-gray-50"
                     }`}
-                    style={{ gridColumn: dzienIndex + 2, gridRow: i + 2 }}
+                    style={{ gridColumn: kolumna + 2, gridRow: i + 2 }}
                   />
                 );
               })
             )}
 
             {bloki
-              .filter((blok) => blok.id !== przeciaganieBloku?.blokId)
+              .filter(
+                (blok) =>
+                  blok.id !== przeciaganieBloku?.blokId && dniWidoczne.includes(blok.dzien_tygodnia)
+              )
               .map((blok) => {
                 const start = godzinaNaLiczbe(blok.godzina_start);
                 const koniec = godzinaNaLiczbe(blok.godzina_koniec);
@@ -1027,7 +1082,7 @@ export default function HarmonogramTygodniowy() {
                     key={blok.id}
                     className="group relative m-0.5 rounded-md px-2 py-1 overflow-hidden cursor-move"
                     style={{
-                      gridColumn: blok.dzien_tygodnia + 2,
+                      gridColumn: dniWidoczne.indexOf(blok.dzien_tygodnia) + 2,
                       gridRow: `${rowStart} / ${rowEnd}`,
                       backgroundColor: kolor + "33",
                       borderLeft: `3px solid ${kolor}`,
@@ -1062,31 +1117,31 @@ export default function HarmonogramTygodniowy() {
                         <StickyNote size={10} className="shrink-0 opacity-60" style={{ color: kolor }} />
                       )}
                     </div>
-                    <div className="absolute top-0.5 right-0.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute top-0.5 right-0.5 flex items-center gap-2 md:gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={() => edytujBlok(blok)}
                         className="text-gray-500 hover:text-blue-600"
                       >
-                        <Pencil size={12} />
+                        <Pencil size={czyTelefon ? 16 : 12} />
                       </button>
                       <button
                         onMouseDown={(e) => e.stopPropagation()}
                         onClick={() => usunBlok(blok.id)}
                         className="text-gray-500 hover:text-red-600"
                       >
-                        <X size={12} />
+                        <X size={czyTelefon ? 16 : 12} />
                       </button>
                     </div>
                   </div>
                 );
               })}
 
-            {podgladBloku && przeciaganieBloku && (
+            {podgladBloku && przeciaganieBloku && dniWidoczne.includes(podgladBloku.dzien) && (
               <div
                 className="relative m-0.5 rounded-md px-2 py-1 overflow-hidden pointer-events-none border-2 border-dashed"
                 style={{
-                  gridColumn: podgladBloku.dzien + 2,
+                  gridColumn: dniWidoczne.indexOf(podgladBloku.dzien) + 2,
                   gridRow: `${podgladBloku.start + 2} / ${podgladBloku.koniec + 3}`,
                   backgroundColor: przeciaganieBloku.kolor + "55",
                   borderColor: przeciaganieBloku.kolor,
@@ -1095,6 +1150,7 @@ export default function HarmonogramTygodniowy() {
             )}
           </div>
         </Card>
+        </>
       )}
     </div>
   );

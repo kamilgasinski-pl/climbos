@@ -1,28 +1,19 @@
 "use client";
 import AuthProvider from "./authprovider";
-import { Mountain, Home, BookOpen, Calendar, Dna, CalendarDays, User, LifeBuoy,Settings } from "lucide-react";
+import { Mountain } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
 import WylogujButton from "./components/WylogujButton";
+import NawigacjaMobilna from "./components/NawigacjaMobilna";
+import { linki, czyAktywna } from "./components/pozycjeMenu";
 
 
 
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
-
-const linki = [
-  { href: "/", label: "Home", ikona: Home },
-  { href: "/planner", label: "Planner", ikona: CalendarDays },
-  { href: "/logbook", label: "Logbook", ikona: BookOpen },
-  { href: "/sesje", label: "Sesje", ikona: Calendar },
-  { href: "/dna", label: "DNA", ikona: Dna },
-  { href: "/profil", label: "Profil", ikona: User },
-  { href: "/ustawienia", label: "Ustawienia", ikona: Settings },
-  { href: "/pomoc", label: "Pomoc", ikona: LifeBuoy },
-];
 
 export default function RootLayout({
   children,
@@ -34,13 +25,13 @@ export default function RootLayout({
   return (
     <html lang="pl" className={cn("font-sans", geist.variable)}>
       <body className="m-0 flex min-h-screen">
-        <nav className="w-[220px] bg-gray-900 text-white p-6 flex flex-col gap-2">
+        <nav className="hidden md:flex w-[220px] shrink-0 bg-gray-900 text-white p-6 flex-col gap-2">
          <div className="font-bold text-xl mb-6 flex items-center gap-2">
   <Mountain size={22} />
   ClimbOS
 </div>
 {linki.map((link) => {
-  const czyAktywny = aktywnaSciezka === link.href;
+  const czyAktywny = czyAktywna(aktywnaSciezka, link.href);
   const Ikona = link.ikona;
   return (
     <Link
@@ -60,9 +51,10 @@ export default function RootLayout({
 <WylogujButton />
       </nav>
 
-        <div style={{ flex: 1, background: "#f5f5f5" }}>
-  <AuthProvider>{children}</AuthProvider>
-</div>
+        <div className="flex-1 min-w-0 bg-[#f5f5f5] pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0">
+          <AuthProvider>{children}</AuthProvider>
+        </div>
+        <NawigacjaMobilna />
       </body>
     </html>
   );

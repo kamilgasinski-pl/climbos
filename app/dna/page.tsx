@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseclient";
-import { policzProgresjeProsta, policzProgresjeWCzasie } from "../engine/progressionEngine";
+import { policzProgresjeWCzasie } from "../engine/progressionEngine";
 import {
   policzKompetencje,
   policzKompetencjeZTreningu,
@@ -15,7 +15,6 @@ import {
   Kompetencja,
   Filar,
 } from "../engine/climbingKnowledgeEngine";
-import PasekTrudnosciProsty from "../components/PasekTrudnosciProsty";
 import WykresProgresji from "../components/WykresProgresji";
 import WykresKompetencji from "../components/Wykreskompetencji";
 import PaskiKompetencji from "../components/PaskiKompetencji";
@@ -52,7 +51,6 @@ type CelSesjiKompetencje = {
   wykonano: boolean;
 };
 
-type Zakladka = "trendy" | "historia";
 type WidokKompetencji = "ogolny" | "szczegolowy";
 type WidokProgresji = "zDolem" | "wedka";
 
@@ -67,7 +65,6 @@ export default function DNA() {
   const [celeSesji, setCeleSesji] = useState<CelSesjiKompetencje[]>([]);
   const [ladowanie, setLadowanie] = useState(true);
   const [bladPobierania, setBladPobierania] = useState("");
-  const [aktywnaZakladka, setAktywnaZakladka] = useState<Zakladka>("trendy");
   const [widokKompetencji, setWidokKompetencji] = useState<WidokKompetencji>("ogolny");
   const [widokProgresji, setWidokProgresji] = useState<WidokProgresji>("zDolem");
 
@@ -100,11 +97,7 @@ export default function DNA() {
   }
 
   const wszystkiePrzejscia = sesje.flatMap((s) => s.przejscia);
-  const przejsciaUkonczone = wszystkiePrzejscia.filter(
-    (p) => liczySieDoProgresji(p) && p.styl !== "Projekt"
-  );
 
-  const progresja = policzProgresjeProsta(przejsciaUkonczone);
   const sesjeDlaWykresu = sesje.map((s) => ({
     ...s,
     przejscia: s.przejscia.filter(
@@ -147,21 +140,6 @@ export default function DNA() {
           : "Twój profil wspinaczkowy, oparty na realnych przejściach"}
       </p>
 
-      <div className="flex gap-2 mt-5 flex-wrap">
-        <Button
-          variant={aktywnaZakladka === "trendy" ? "default" : "outline"}
-          onClick={() => setAktywnaZakladka("trendy")}
-        >
-          Trendy
-        </Button>
-        <Button
-          variant={aktywnaZakladka === "historia" ? "default" : "outline"}
-          onClick={() => setAktywnaZakladka("historia")}
-        >
-          Historia
-        </Button>
-      </div>
-
       {ladowanie ? (
         <div className="flex items-center gap-2 text-gray-500 mt-8">
           <Loader2 className="animate-spin" size={20} />
@@ -169,7 +147,7 @@ export default function DNA() {
         </div>
       ) : bladPobierania ? (
         <p className="text-red-600 mt-8">{bladPobierania}</p>
-      ) : aktywnaZakladka === "trendy" ? (
+      ) : (
         <>
           <div className="flex items-center justify-between mt-8">
             <h2 className="text-xl font-bold">Progresja w czasie</h2>
@@ -227,19 +205,6 @@ export default function DNA() {
 
           <h2 className="text-xl font-bold mt-8 mb-3">Skład ciała</h2>
           <WykresPomiarowCiala />
-        </>
-      ) : (
-        <>
-          <h2 className="text-xl font-bold mt-8">Historia progresji</h2>
-          <Card className="px-4 py-2">
-            {progresja.length === 0 ? (
-              <p className="text-gray-500 py-5">
-                Brak danych — dodaj kilka przejść w Logbooku, żeby zobaczyć progresję.
-              </p>
-            ) : (
-              progresja.map((w) => <PasekTrudnosciProsty key={w.trudnosc} wynik={w} />)
-            )}
-          </Card>
         </>
       )}
     </main>

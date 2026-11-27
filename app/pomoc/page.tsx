@@ -238,10 +238,6 @@ const SEKCJE: Sekcja[] = [
         nazwa: "Trendy",
         opis: "Progresja w czasie, wykres radarowy kompetencji (widok Ogólny: 3 filary, Szczegółowy: 13 kompetencji), paski kompetencji oraz wykres składu ciała z pomiarów z Profilu (przełącznik parametrów).",
       },
-      {
-        nazwa: "Historia",
-        opis: "Liczba przejść na każdym poziomie trudności (wędka i z dołem).",
-      },
     ],
   },
   {

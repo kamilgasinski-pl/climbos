@@ -4,7 +4,15 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
+import { SKALA_KURTYKI } from "../engine/gradeEngine";
 import {
   Ustawienia as TypUstawien,
   ZAKLADKI_PLANNERA,
@@ -15,6 +23,9 @@ import {
   pobierzUstawienia,
   zapiszUstawienia,
 } from "../engine/ustawieniaEngine";
+
+// Select nie przyjmuje pustej wartości, więc "brak poziomu" ma własny klucz.
+const BRAK_POZIOMU = "brak";
 
 function Pigulka({
   aktywna,
@@ -139,20 +150,33 @@ export default function UstawieniaStrona() {
               </div>
             </section>
             <section>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="font-bold">Test poziomu</div>
-                  <p className="text-gray-500 text-sm mt-0.5">
-                    Gdy włączony, test poziomu jest dostępny w DNA i na stronie głównej. Wyłączony
-                    ukrywa go, a zapisane wyniki zostają i wrócą po ponownym włączeniu.
-                  </p>
-                </div>
-                <Suwak
-                  wlaczony={ustawienia.test_poziomu_wlaczony}
-                  zmianaAction={(nowa) =>
-                    setUstawienia((u) => ({ ...u, test_poziomu_wlaczony: nowa }))
+              <div className="font-bold">Poziom wspinaczkowy</div>
+              <p className="text-gray-500 text-sm mt-0.5">
+                Twój poziom na podstawie własnego doświadczenia. To punkt startowy Mega Celu, więc
+                pasek postępu pokazuje drogę od tego poziomu do celu.
+              </p>
+              <div className="mt-3">
+                <Select
+                  value={ustawienia.poziom_wspinaczkowy ?? BRAK_POZIOMU}
+                  onValueChange={(v) =>
+                    setUstawienia((u) => ({
+                      ...u,
+                      poziom_wspinaczkowy: !v || v === BRAK_POZIOMU ? null : v,
+                    }))
                   }
-                />
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Nie określono" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={BRAK_POZIOMU}>Nie określono</SelectItem>
+                    {SKALA_KURTYKI.map((o) => (
+                      <SelectItem key={o} value={o}>
+                        {o}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </section>
             <section>

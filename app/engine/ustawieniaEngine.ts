@@ -1,4 +1,5 @@
 import { supabase } from "../supabaseclient";
+import { SKALA_KURTYKI } from "./gradeEngine";
 
 export type ZakladkaPlannera =
   | "sesje"
@@ -15,7 +16,8 @@ export type Ustawienia = {
   domyslny_widok_sesji: WidokSesji;
   dni_na_wykonanie_bloku: number;
   zarzadzanie_kompetencjami: boolean;
-  test_poziomu_wlaczony: boolean;
+  /** Poziom zadeklarowany przez wspinacza (skala Kurtyki), punkt startowy Mega Celu. null = jeszcze nie określony. */
+  poziom_wspinaczkowy: string | null;
 };
 
 export const ZAKLADKI_PLANNERA: { klucz: ZakladkaPlannera; etykieta: string }[] = [
@@ -41,7 +43,7 @@ export const DOMYSLNE_USTAWIENIA: Ustawienia = {
   domyslny_widok_sesji: "tydzien",
   dni_na_wykonanie_bloku: 7,
   zarzadzanie_kompetencjami: false,
-  test_poziomu_wlaczony: false,
+  poziom_wspinaczkowy: null,
 };
 
 function poprawneUstawienia(surowe: Record<string, unknown> | null): Ustawienia {
@@ -67,10 +69,9 @@ function poprawneUstawienia(surowe: Record<string, unknown> | null): Ustawienia 
       typeof surowe?.zarzadzanie_kompetencjami === "boolean"
         ? surowe.zarzadzanie_kompetencjami
         : DOMYSLNE_USTAWIENIA.zarzadzanie_kompetencjami,
-    test_poziomu_wlaczony:
-      typeof surowe?.test_poziomu_wlaczony === "boolean"
-        ? surowe.test_poziomu_wlaczony
-        : DOMYSLNE_USTAWIENIA.test_poziomu_wlaczony,
+    poziom_wspinaczkowy:
+      SKALA_KURTYKI.find((o) => o === surowe?.poziom_wspinaczkowy) ??
+      DOMYSLNE_USTAWIENIA.poziom_wspinaczkowy,
   };
 }
 
@@ -79,7 +80,7 @@ export async function pobierzUstawienia(): Promise<Ustawienia> {
   const { data, error } = await supabase
     .from("ustawienia_uzytkownika")
     .select(
-      "domyslna_zakladka_plannera, domyslny_widok_sesji, dni_na_wykonanie_bloku, zarzadzanie_kompetencjami, test_poziomu_wlaczony"
+      "domyslna_zakladka_plannera, domyslny_widok_sesji, dni_na_wykonanie_bloku, zarzadzanie_kompetencjami, poziom_wspinaczkowy"
     )
     .maybeSingle();
 
@@ -108,4 +109,10 @@ export async function zapiszUstawienia(ustawienia: Ustawienia): Promise<string |
     return "Nie udało się zapisać ustawień. Spróbuj ponownie.";
   }
   return null;
+}
+
+/** Zapisuje sam poziom wspinaczkowy, nie ruszając pozostałych ustawień. */
+export async function zapiszPoziomWspinaczkowy(poziom: string | null): Promise<string | null> {
+  const biezace = await pobierzUstawienia();
+  return zapiszUstawienia({ ...biezace, poziom_wspinaczkowy: poziom });
 }

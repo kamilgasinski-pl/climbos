@@ -17,7 +17,8 @@ import ZblizajacyCel from "./components/ZblizajacyCel";
 import DzisiejszeAktywnosci from "./components/DzisiejszeAktywnosci";
 import Projekty from "./components/Projekty";
 import PodsumowanieTreningow from "./components/PodsumowanieTreningow";
-import { useTestPoziomuWlaczony } from "./components/useTestPoziomuWlaczony";
+import PytanieOPoziom from "./components/PytanieOPoziom";
+import { pobierzUstawienia } from "./engine/ustawieniaEngine";
 import Link from "next/link";
 
 
@@ -48,12 +49,7 @@ type CelSesjiKompetencje = {
   wykonano: boolean;
 };
 
-type WynikTestu = {
-  ocena_koncowa: string;
-  data_testu: string;
-};
-
-/** Ile pierwszych dróg w danym stylu wyznacza punkt startowy Mega Celu, gdy nie ma testu poziomu. */
+/** Ile pierwszych dróg w danym stylu wyznacza punkt startowy Mega Celu, gdy nie ma zadeklarowanego poziomu. */
 const LICZBA_DROG_DO_STARTU = 3;
 
 /**
@@ -72,19 +68,18 @@ function ocenaStartowaZDrog(sesje: Sesja[], styl: string): string | null {
 }
 
 export default function Home() {
-  const testPoziomuWlaczony = useTestPoziomuWlaczony();
-
   const [sesje, setSesje] = useState<Sesja[]>([]);
   const [blokiTreningowe, setBlokiTreningowe] = useState<BlokKompetencje[]>([]);
   const [wykonaniaBlokow, setWykonaniaBlokow] = useState<WykonanieBloku[]>([]);
   const [celeSesji, setCeleSesji] = useState<CelSesjiKompetencje[]>([]);
-  const [najnowszyTest, setNajnowszyTest] = useState<WynikTestu | null>(null);
+  // undefined = ustawienia jeszcze się ładują (nie pokazujemy wtedy pytania o poziom)
+  const [poziom, setPoziom] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
     pobierzDane();
     pobierzKompetencjeTreningowe();
     pobierzKompetencjeZCelowSesji();
-    pobierzNajnowszyTest();
+    pobierzUstawienia().then((u) => setPoziom(u.poziom_wspinaczkowy));
   }, []);
 
   async function pobierzDane() {
@@ -124,21 +119,6 @@ export default function Home() {
     setCeleSesji(data as unknown as CelSesjiKompetencje[]);
   }
 
-  async function pobierzNajnowszyTest() {
-    const { data, error } = await supabase
-      .from("testy_poziomu")
-      .select("ocena_koncowa, data_testu")
-      .order("data_testu", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      console.error("Błąd pobierania testu poziomu:", error);
-      return;
-    }
-    setNajnowszyTest(data as WynikTestu | null);
-  }
-
   const wszystkiePrzejscia = sesje.flatMap((s) => s.przejscia);
   const ocenyRP = wszystkiePrzejscia.filter((p) => p.styl === "RP").map((p) => p.trudnosc);
   const ocenyOS = wszystkiePrzejscia.filter((p) => p.styl === "OS").map((p) => p.trudnosc);
@@ -176,12 +156,13 @@ export default function Home() {
       <h1 className="text-3xl font-bold">Witaj w ClimbOS</h1>
       <p className="text-gray-500">Twój cyfrowy trener wspinaczkowy</p>
 
+      {poziom === null && <PytanieOPoziom zapisanoAction={setPoziom} />}
+
       {/* Mega Cel zawsze na górze - stałe przypomnienie co mamy osiągnąć */}
       <MegaCel
         najtrudniejszaRP={najtrudniejszaRP}
         najtrudniejszaOS={najtrudniejszaOS}
-        trudnoscTestu={najnowszyTest?.ocena_koncowa ?? null}
-        pokazTest={testPoziomuWlaczony}
+        poziomStartowy={poziom ?? null}
         startZDrogRP={startZDrogRP}
         startZDrogOS={startZDrogOS}
       />
@@ -216,33 +197,6 @@ export default function Home() {
           </div>
         </CardContent>
       </Card>
-
-      {testPoziomuWlaczony && (
-        <Card className="mt-6 p-4">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <div className="text-gray-500 text-sm">Szacowany poziom (test)</div>
-              {najnowszyTest ? (
-                <>
-                  <div className="text-xl font-bold">{najnowszyTest.ocena_koncowa}</div>
-                  <div className="text-gray-400 text-xs mt-0.5">
-                    {new Date(najnowszyTest.data_testu).toLocaleDateString("pl-PL", {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </div>
-                </>
-              ) : (
-                <div className="text-gray-400 text-sm mt-1">Jeszcze nie wykonano testu</div>
-              )}
-            </div>
-            <Link href="/dna" className={buttonVariants({ size: "sm" })}>
-              {najnowszyTest ? "Zrób test ponownie" : "Zrób test poziomu"}
-            </Link>
-          </div>
-        </Card>
-      )}
 
       {/* Co dziś do zrobienia */}
       <DzisiejszeAktywnosci onZmianaAction={pobierzKompetencjeTreningowe} />

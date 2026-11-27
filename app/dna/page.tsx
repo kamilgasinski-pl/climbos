@@ -20,12 +20,10 @@ import PasekTrudnosciProsty from "../components/PasekTrudnosciProsty";
 import WykresProgresji from "../components/WykresProgresji";
 import WykresKompetencji from "../components/Wykreskompetencji";
 import PaskiKompetencji from "../components/PaskiKompetencji";
-import TestPoziomu from "../components/TestPoziomu";
 import { Loader2 } from "lucide-react";
 import WykresPomiarowCiala from "../components/WykresPomiarowCiala";
 import { liczySieDoProgresji } from "../engine/gradeEngine";
 import { useKompetencjeWlaczone } from "../components/useKompetencjeWlaczone";
-import { useTestPoziomuWlaczony } from "../components/useTestPoziomuWlaczony";
 
 type Przejscie = {
   id: number;
@@ -55,7 +53,7 @@ type CelSesjiKompetencje = {
   wykonano: boolean;
 };
 
-type Zakladka = "trendy" | "luki" | "historia" | "test";
+type Zakladka = "trendy" | "luki" | "historia";
 type WidokKompetencji = "ogolny" | "szczegolowy";
 type WidokProgresji = "zDolem" | "wedka";
 
@@ -63,7 +61,6 @@ const STYLE_Z_DOLEM = ["Flash", "OS", "RP"];
 
 export default function DNA() {
   const kompetencjeWlaczone = useKompetencjeWlaczone();
-  const testPoziomuWlaczony = useTestPoziomuWlaczony();
 
   const [sesje, setSesje] = useState<Sesja[]>([]);
   const [bloki, setBloki] = useState<Blok[]>([]);
@@ -172,12 +169,6 @@ export default function DNA() {
         >
           Historia
         </Button>
-        <Button
-            variant={aktywnaZakladka === "test" ? "default" : "outline"}
-            onClick={() => setAktywnaZakladka("test")}
-          >
-            Test poziomu
-          </Button>
       </div>
 
       {ladowanie ? (
@@ -264,7 +255,7 @@ export default function DNA() {
             )}
           </div>
         </>
-      ) : aktywnaZakladka === "historia" ? (
+      ) : (
         <>
           <h2 className="text-xl font-bold mt-8">Historia progresji</h2>
           <Card className="px-4 py-2">
@@ -277,8 +268,6 @@ export default function DNA() {
             )}
           </Card>
         </>
-      ) : (
-        <TestPoziomu przejscia={przejsciaUkonczone} />
       )}
     </main>
   );

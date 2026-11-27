@@ -29,10 +29,8 @@ type Cel = {
 type Props = {
   najtrudniejszaRP: string | null;
   najtrudniejszaOS: string | null;
-  /** Ocena z ostatniego wykonanego testu poziomu (skala Kurtyki), punkt startowy paska */
-  trudnoscTestu: string | null;
-  /** Czy Test poziomu jest włączony w Ustawieniach. Wyłączony ukrywa link do testu. */
-  pokazTest?: boolean;
+  /** Poziom zadeklarowany przez wspinacza (skala Kurtyki), punkt startowy paska */
+  poziomStartowy: string | null;
   /** Start paska wyliczony z pierwszych dróg w stylu RP/OS (null, dopóki ich za mało) */
   startZDrogRP?: string | null;
   startZDrogOS?: string | null;
@@ -41,8 +39,7 @@ type Props = {
 export default function MegaCel({
   najtrudniejszaRP,
   najtrudniejszaOS,
-  trudnoscTestu,
-  pokazTest = true,
+  poziomStartowy,
   startZDrogRP = null,
   startZDrogOS = null,
 }: Props) {
@@ -214,11 +211,10 @@ export default function MegaCel({
   const najtrudniejszaWStylu = cel.styl_docelowy === "OS" ? najtrudniejszaOS : najtrudniejszaRP;
   const startZDrog = cel.styl_docelowy === "OS" ? startZDrogOS : startZDrogRP;
 
-  // Punkt startowy paska: wynik testu (jeśli test jest włączony i wykonany),
-  // w przeciwnym razie najtrudniejsza z pierwszych dróg w stylu celu.
-  const startZTestu = pokazTest ? trudnoscTestu : null;
-  const trudnoscStartowa = startZTestu ?? startZDrog;
-  const zrodloStartu = startZTestu ? "test poziomu" : "pierwsze drogi";
+  // Punkt startowy paska: poziom zadeklarowany przez wspinacza, a gdy go nie ma —
+  // najtrudniejsza z pierwszych dróg w stylu celu.
+  const trudnoscStartowa = poziomStartowy ?? startZDrog;
+  const zrodloStartu = poziomStartowy ? "Twój poziom" : "pierwsze drogi";
 
   // Brak wiarygodnego punktu startowego - pokazujemy tylko cel.
   if (!trudnoscStartowa) {
@@ -237,21 +233,15 @@ export default function MegaCel({
           <span className="text-gray-400">→</span>
           <span className="text-blue-600">{cel.trudnosc_docelowa}</span>
         </div>
-        {pokazTest ? (
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="text-gray-500 text-sm">
-              Zrób test poziomu albo dodaj kilka dróg w stylu {cel.styl_docelowy}, żeby zobaczyć
-              pasek postępu do celu.
-            </div>
-            <Link href="/dna" className={buttonVariants({ size: "sm" })}>
-              Zrób test poziomu
-            </Link>
-          </div>
-        ) : (
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="text-gray-500 text-sm">
-            Dodaj kilka dróg w stylu {cel.styl_docelowy}, a pojawi się pasek postępu do celu.
+            Określ swój poziom wspinaczkowy albo dodaj kilka dróg w stylu {cel.styl_docelowy},
+            żeby zobaczyć pasek postępu do celu.
           </div>
-        )}
+          <Link href="/ustawienia" className={buttonVariants({ size: "sm" })}>
+            Określ poziom
+          </Link>
+        </div>
       </Card>
     );
   }

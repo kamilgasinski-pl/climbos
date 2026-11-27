@@ -7,11 +7,11 @@ type Punkt = { nazwa: string; opis: string };
 type Sekcja = { id: string; tytul: string; wstep?: string; punkty: Punkt[] };
 
 const SZYBKI_START: string[] = [
-  "Na Home ustaw Mega Cel (ołówek w karcie celu), a w DNA → Test poziomu zrób pierwszy test. Dzięki temu pasek postępu ma punkt startowy.",
+  "Na Home określ swój poziom wspinaczkowy i ustaw Mega Cel (ołówek w karcie celu). Dzięki temu pasek postępu ma punkt startowy.",
   "W Planner → Harmonogram tygodniowy ułóż tydzień: przeciągnij po siatce, nazwij blok, wybierz kategorię. Kliknij „Zapisz szablon”, żeby kolejne tygodnie powstawały z Twojego planu.",
   "Codziennie odhaczaj aktywności na Home (Dzisiejsze aktywności) albo w Planner → Realizacja.",
   "Po wspinaniu dodaj sesję (Home → + Dodaj nową sesję), wejdź w jej szczegóły i wpisz drogi, RPE albo dane z zegarka.",
-  "Postępy oglądaj w Logbooku (sesje i przejścia) oraz w DNA (kompetencje, test poziomu, skład ciała).",
+  "Postępy oglądaj w Logbooku (sesje i przejścia) oraz w DNA (kompetencje, skład ciała).",
 ];
 
 const SEKCJE: Sekcja[] = [
@@ -22,7 +22,7 @@ const SEKCJE: Sekcja[] = [
     punkty: [
       {
         nazwa: "Mega Cel",
-        opis: "Twój główny cel: konkretna trudność w stylu OS albo RP, albo opis własnymi słowami (np. przejście wybranej drogi). Dla celu z trudnością pasek pokazuje drogę od wyniku ostatniego testu poziomu do celu, więc bez testu poziomu pasek się nie pojawi. Aktualny poziom to wyższa z wartości: wynik testu albo najtrudniejsza ukończona droga w stylu celu. Edytujesz go ołówkiem (również w Planner → Cele).",
+        opis: "Twój główny cel: konkretna trudność w stylu OS albo RP, albo opis własnymi słowami (np. przejście wybranej drogi). Dla celu z trudnością pasek pokazuje drogę od Twojego poziomu wspinaczkowego do celu. Dopóki nie określisz poziomu, punktem startowym są Twoje pierwsze drogi w stylu celu (po trzech wpisanych drogach). Aktualny poziom to wyższa z wartości: poziom startowy albo najtrudniejsza ukończona droga w stylu celu. Edytujesz go ołówkiem (również w Planner → Cele).",
       },
       {
         nazwa: "Zbliżające się cele",
@@ -33,8 +33,8 @@ const SEKCJE: Sekcja[] = [
         opis: "Najtrudniejsza OS, RP i Wędka liczą się tylko z dróg ukończonych w całości i bez bloku. „Łącznie przejść Wędka” to wszystkie przejścia na wędkę, „z dołem” to OS + RP + Projekt, a „Łączna liczba przejść” to wszystkie próby.",
       },
       {
-        nazwa: "Szacowany poziom (test)",
-        opis: "Wynik ostatniego testu poziomu. Przycisk prowadzi do DNA, gdzie robisz test.",
+        nazwa: "Określ swój poziom wspinaczkowy",
+        opis: "Pytanie na Home, dopóki nie wybierzesz poziomu na podstawie własnego doświadczenia. Poziom jest punktem startowym Mega Celu. Zmienisz go później w Ustawieniach.",
       },
       {
         nazwa: "Dzisiejsze aktywności",
@@ -246,10 +246,6 @@ const SEKCJE: Sekcja[] = [
         nazwa: "Historia",
         opis: "Liczba przejść na każdym poziomie trudności (wędka i z dołem).",
       },
-      {
-        nazwa: "Test poziomu",
-        opis: "Szacuje Twój poziom z pięciu obszarów: wyniki na drogach (35%), siła palców (20%), ciągnięcie (15%), wytrzymałość (15%) i technika (15%). Wynik końcowy nie może przekroczyć wyniku na drogach o więcej niż 2 stopnie, żeby sama siła nie zawyżała oceny. Test wskazuje też, co Cię najbardziej ogranicza, a wyniki zapisują się w historii. Progi referencyjne są szacunkowe i mogą wymagać kalibracji na Twoich danych.",
-      },
     ],
   },
   {
@@ -289,6 +285,10 @@ const SEKCJE: Sekcja[] = [
     tytul: "Ustawienia",
     wstep: "Preferencje działania aplikacji (menu → Ustawienia).",
     punkty: [
+      {
+        nazwa: "Poziom wspinaczkowy",
+        opis: "Twój poziom na podstawie własnego doświadczenia. To punkt startowy Mega Celu na Home. Możesz go zmienić albo wyczyścić (wtedy start paska wyliczy się z Twoich pierwszych dróg).",
+      },
       {
         nazwa: "Planner",
         opis: "Wybierasz zakładkę, którą Planner otwiera domyślnie, oraz domyślny widok listy zaplanowanych sesji (dzień, tydzień, miesiąc). Linki z innych stron nadal otwierają wskazaną zakładkę.",

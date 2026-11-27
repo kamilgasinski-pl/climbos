@@ -3,8 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { supabase } from "../supabaseclient";
-import { policzProgresje, policzProgresjeProsta, policzProgresjeWCzasie } from "../engine/progressionEngine";
-import { generujRekomendacje } from "../engine/recommendationEngine";
+import { policzProgresjeProsta, policzProgresjeWCzasie } from "../engine/progressionEngine";
 import {
   policzKompetencje,
   policzKompetencjeZTreningu,
@@ -53,7 +52,7 @@ type CelSesjiKompetencje = {
   wykonano: boolean;
 };
 
-type Zakladka = "trendy" | "luki" | "historia";
+type Zakladka = "trendy" | "historia";
 type WidokKompetencji = "ogolny" | "szczegolowy";
 type WidokProgresji = "zDolem" | "wedka";
 
@@ -105,7 +104,6 @@ export default function DNA() {
     (p) => liczySieDoProgresji(p) && p.styl !== "Projekt"
   );
 
-  const progresjaSzczegolowa = policzProgresje(przejsciaUkonczone);
   const progresja = policzProgresjeProsta(przejsciaUkonczone);
   const sesjeDlaWykresu = sesje.map((s) => ({
     ...s,
@@ -116,7 +114,6 @@ export default function DNA() {
     ),
   }));
   const progresjaWCzasie = policzProgresjeWCzasie(sesjeDlaWykresu);
-  const rekomendacje = generujRekomendacje(progresjaSzczegolowa);
 
   const kompetencjeZDrog = policzKompetencje(wszystkiePrzejscia);
   const kompetencjeZTreningu = policzKompetencjeZTreningu(bloki, wykonania);
@@ -156,12 +153,6 @@ export default function DNA() {
           onClick={() => setAktywnaZakladka("trendy")}
         >
           Trendy
-        </Button>
-        <Button
-          variant={aktywnaZakladka === "luki" ? "default" : "outline"}
-          onClick={() => setAktywnaZakladka("luki")}
-        >
-          Analiza luk
         </Button>
         <Button
           variant={aktywnaZakladka === "historia" ? "default" : "outline"}
@@ -236,24 +227,6 @@ export default function DNA() {
 
           <h2 className="text-xl font-bold mt-8 mb-3">Skład ciała</h2>
           <WykresPomiarowCiala />
-        </>
-      ) : aktywnaZakladka === "luki" ? (
-        <>
-          <h2 className="text-xl font-bold mt-8">Jak się rozwijać?</h2>
-          <div className="flex flex-col gap-3">
-            {rekomendacje.length === 0 ? (
-              <p className="text-gray-500 py-5">
-                Brak rekomendacji — dodaj kilka przejść, żeby zobaczyć podpowiedzi.
-              </p>
-            ) : (
-              rekomendacje.map((r) => (
-                <Card key={r.tytul} className="p-4">
-                  <div className="font-bold">{r.tytul}</div>
-                  <div className="text-gray-500 text-sm mt-1">{r.opis}</div>
-                </Card>
-              ))
-            )}
-          </div>
         </>
       ) : (
         <>
